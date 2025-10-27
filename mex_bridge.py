@@ -105,13 +105,37 @@ class MexManager:
                     logger.debug("Full output is not JSON, trying line-by-line parsing")
                     lines = result.stdout.strip().split('\n')
 
-                    # Try from last line backwards to find valid JSON
+                    # Filter out known progress messages but keep original lines (not stripped)
+                    filtered_lines = [
+                        line for line in lines
+                        if not line.strip().startswith('Trimmed Image')
+                    ]
+
+                    # Rejoin filtered lines and try parsing as complete JSON
+                    if filtered_lines:
+                        filtered_output = '\n'.join(filtered_lines)
+                        try:
+                            output = json.loads(filtered_output)
+                            logger.info(f"MexCLI response (filtered): {json.dumps(output, indent=2)}")
+
+                            # Check for error in JSON response
+                            if isinstance(output, dict) and not output.get('success', True):
+                                error_msg = output.get('error', 'Unknown error')
+                                logger.error(f"MexCLI returned error: {error_msg}")
+                                raise MexManagerError(f"MexCLI error: {error_msg}")
+
+                            return output
+                        except json.JSONDecodeError as e:
+                            # Still couldn't parse - try line-by-line as fallback
+                            logger.debug(f"Filtered output still not valid JSON: {e}")
+
+                    # Final fallback: Try from last line backwards to find valid JSON
                     for line in reversed(lines):
                         line = line.strip()
                         if line.startswith('{') or line.startswith('['):
                             try:
                                 output = json.loads(line)
-                                logger.info(f"MexCLI response (from line): {json.dumps(output, indent=2)}")
+                                logger.info(f"MexCLI response (single line): {json.dumps(output, indent=2)}")
 
                                 # Check for error in JSON response
                                 if isinstance(output, dict) and not output.get('success', True):
@@ -123,9 +147,9 @@ class MexManager:
                             except json.JSONDecodeError:
                                 continue
 
-                    # No valid JSON found
+                    # No valid JSON found anywhere
                     logger.error(f"Failed to parse any JSON from MexCLI output: {result.stdout}")
-                    raise MexManagerError(f"Invalid JSON response from mexcli. Output: {result.stdout}")
+                    raise MexManagerError(f"Invalid JSON response from mexcli. Output: {result.stdout[:500]}")
 
             # If no stdout, check stderr
             if result.stderr:
@@ -225,6 +249,29 @@ class MexManager:
             str(self.project_path),
             fighter_name,
             str(zip_path)
+        )
+
+    def remove_costume(self, fighter_name: str, costume_index: int) -> Dict:
+        """
+        Remove a costume from a fighter.
+
+        Args:
+            fighter_name: Name of fighter (e.g., "Fox")
+            costume_index: Index of costume to remove (0-based)
+
+        Returns:
+            Dict with removal results:
+                - success: bool
+                - fighter: str
+                - fighterInternalId: int
+                - removedCostume: dict (index, name, fileName)
+                - remainingCostumes: int
+        """
+        return self._run_command(
+            "remove-costume",
+            str(self.project_path),
+            fighter_name,
+            str(costume_index)
         )
 
     def save_project(self) -> Dict:

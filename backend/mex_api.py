@@ -224,6 +224,66 @@ def import_costume():
         }), 500
 
 
+@app.route('/api/mex/remove', methods=['POST'])
+def remove_costume():
+    """
+    Remove costume from MEX project
+
+    Body:
+    {
+        "fighter": "Fox",
+        "costumeIndex": 3
+    }
+    """
+    try:
+        data = request.json
+        fighter_name = data.get('fighter')
+        costume_index = data.get('costumeIndex')
+
+        logger.info(f"=== REMOVE REQUEST ===")
+        logger.info(f"Fighter: {fighter_name}")
+        logger.info(f"Costume Index: {costume_index}")
+
+        if fighter_name is None or costume_index is None:
+            logger.error("Missing fighter or costumeIndex parameter")
+            return jsonify({
+                'success': False,
+                'error': 'Missing fighter or costumeIndex parameter'
+            }), 400
+
+        # Validate costume index
+        if not isinstance(costume_index, int) or costume_index < 0:
+            logger.error(f"Invalid costume index: {costume_index}")
+            return jsonify({
+                'success': False,
+                'error': 'costumeIndex must be a non-negative integer'
+            }), 400
+
+        logger.info(f"Calling MexCLI to remove costume...")
+        mex = get_mex_manager()
+        result = mex.remove_costume(fighter_name, costume_index)
+
+        logger.info(f"Remove result: {json.dumps(result, indent=2)}")
+        logger.info(f"=== REMOVE COMPLETE ===")
+
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+    except MexManagerError as e:
+        logger.error(f"MexManagerError: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {str(e)}'
+        }), 500
+
+
 @app.route('/api/mex/export/start', methods=['POST'])
 def start_export():
     """

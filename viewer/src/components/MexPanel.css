@@ -117,6 +117,39 @@
   cursor: not-allowed;
 }
 
+.btn-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(244, 67, 54, 0.9);
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.btn-remove:hover {
+  background: #f44336;
+  transform: scale(1.1);
+}
+
+.btn-remove:disabled {
+  background: rgba(102, 102, 102, 0.9);
+  cursor: not-allowed;
+  transform: none;
+}
+
 .mex-stats {
   display: flex;
   gap: 2rem;
@@ -211,13 +244,29 @@
 
 .costumes-panel {
   display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  flex-direction: row;
+  overflow: hidden;
   gap: 0;
+  flex: 1;
+  position: relative;
+  transition: opacity 0.2s;
+}
+
+.costumes-panel.refreshing {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .costumes-section {
-  border-bottom: 1px solid #333;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid #333;
+}
+
+.costumes-section:last-child {
+  border-right: none;
 }
 
 .costumes-section h3 {
@@ -236,6 +285,8 @@
   gap: 1rem;
   align-content: start;
   min-height: 150px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .costume-list.existing {
@@ -264,6 +315,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 }
 
 .costume-preview img {
@@ -324,10 +376,9 @@
 }
 
 .stock-icon {
-  width: 24px;
-  height: 24px;
-  background: #0f0f0f;
-  border-radius: 3px;
+  width: 64px;
+  height: 64px;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -338,6 +389,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  image-rendering: crisp-edges;
 }
 
 .costume-badges {

@@ -12,6 +12,9 @@ const MexPanel = () => {
   const [error, setError] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importingCostume, setImportingCostume] = useState(null); // Track which costume is being imported
+  const [removing, setRemoving] = useState(false);
+  const [removingCostume, setRemovingCostume] = useState(null); // Track which costume is being removed
+  const [refreshing, setRefreshing] = useState(false);
   const [showIsoBuilder, setShowIsoBuilder] = useState(false);
 
   const API_URL = 'http://127.0.0.1:5000/api/mex';
@@ -113,12 +116,15 @@ const MexPanel = () => {
       console.log('Import response:', data);
 
       if (data.success) {
-        alert(`Successfully imported costume to ${costume.character}!\n${data.result.costumesImported} costume(s) added.`);
-        // Refresh fighters and MEX costumes to show updated data
-        fetchFighters();
-        if (selectedFighter) {
-          fetchMexCostumes(selectedFighter.name);
-        }
+        console.log(`✓ Successfully imported ${data.result.costumesImported} costume(s) to ${costume.character}`);
+
+        // Immediately refresh to show updated data
+        setRefreshing(true);
+        await Promise.all([
+          fetchFighters(),
+          selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+        ]);
+        setRefreshing(false);
       } else {
         alert(`Import failed: ${data.error}`);
       }
@@ -128,6 +134,66 @@ const MexPanel = () => {
     } finally {
       setImporting(false);
       setImportingCostume(null);
+    }
+  };
+
+  const handleRemoveCostume = async (fighterName, costumeIndex, costumeName) => {
+    // Prevent multiple simultaneous removals
+    if (removing || removingCostume !== null) {
+      console.log('Remove already in progress, ignoring click');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to remove "${costumeName}" from ${fighterName}?`)) {
+      return;
+    }
+
+    console.log(`=== REMOVE REQUEST ===`);
+    console.log(`Fighter: ${fighterName}`);
+    console.log(`Costume Index: ${costumeIndex}`);
+    console.log(`Costume Name: ${costumeName}`);
+
+    setRemoving(true);
+    setRemovingCostume(costumeIndex);
+
+    try {
+      const requestBody = {
+        fighter: fighterName,
+        costumeIndex: costumeIndex
+      };
+
+      console.log('Sending remove request:', requestBody);
+
+      const response = await fetch(`${API_URL}/remove`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      console.log('Remove response:', data);
+
+      if (data.success) {
+        console.log(`✓ Successfully removed "${costumeName}" from ${fighterName}`);
+
+        // Immediately refresh to show updated data
+        setRefreshing(true);
+        await Promise.all([
+          fetchFighters(),
+          selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+        ]);
+        setRefreshing(false);
+      } else {
+        alert(`Remove failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('Remove error:', err);
+      alert(`Remove error: ${err.message}`);
+    } finally {
+      setRemoving(false);
+      setRemovingCostume(null);
     }
   };
 
@@ -219,7 +285,7 @@ const MexPanel = () => {
           </div>
         </div>
 
-        <div className="costumes-panel">
+        <div className={`costumes-panel ${refreshing ? 'refreshing' : ''}`}>
           {selectedFighter ? (
             <>
               <div className="costumes-section">
@@ -234,13 +300,24 @@ const MexPanel = () => {
                             alt={costume.name}
                             onError={(e) => e.target.style.display = 'none'}
                           />
+                          <button
+                            className="btn-remove"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveCostume(selectedFighter.name, idx, costume.name);
+                            }}
+                            disabled={removing}
+                            title="Remove costume"
+                          >
+                            ×
+                          </button>
                         </div>
                       )}
                       <div className="costume-info">
                         <h4>{costume.name}</h4>
                         <p className="costume-file">{costume.fileName}</p>
-                        <div className="costume-assets">
-                          {costume.iconUrl && (
+                        {costume.iconUrl && (
+                          <div className="costume-assets">
                             <div className="stock-icon">
                               <img
                                 src={`${API_URL}${costume.iconUrl}`}
@@ -248,12 +325,8 @@ const MexPanel = () => {
                                 onError={(e) => e.target.style.display = 'none'}
                               />
                             </div>
-                          )}
-                          <div className="costume-badges">
-                            {costume.hasCSP && <span className="badge">CSP</span>}
-                            {costume.hasIcon && <span className="badge">Stock</span>}
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   ))}

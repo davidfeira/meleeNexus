@@ -68,18 +68,34 @@ namespace MexCLI.Commands
                 // Apply compression to CSPs (force=true to ensure it processes even if already at target size)
                 if (cspCompression < 1.0f)
                 {
-                    var compressionProgress = new
+                    var compressionStart = new
                     {
                         status = "progress",
                         percentage = 0,
-                        message = $"Applying CSP compression to {targetWidth}x{targetHeight}..."
+                        message = $"Preparing CSP compression ({targetWidth}x{targetHeight})..."
                     };
-                    Console.WriteLine(JsonSerializer.Serialize(compressionProgress));
+                    Console.WriteLine(JsonSerializer.Serialize(compressionStart));
                     Console.Error.WriteLine($"[DEBUG] Calling ApplyCompression with force=true");
+
+                    var compressionProcessing = new
+                    {
+                        status = "progress",
+                        percentage = 5,
+                        message = $"Processing character portraits (this may take 30-60 seconds)..."
+                    };
+                    Console.WriteLine(JsonSerializer.Serialize(compressionProcessing));
 
                     workspace.Project.CharacterSelect.ApplyCompression(workspace, force: true);
 
                     Console.Error.WriteLine($"[DEBUG] ApplyCompression completed, now saving workspace...");
+
+                    var savingWorkspace = new
+                    {
+                        status = "progress",
+                        percentage = 8,
+                        message = "Saving compressed textures to disk..."
+                    };
+                    Console.WriteLine(JsonSerializer.Serialize(savingWorkspace));
 
                     // IMPORTANT: Save workspace to persist compressed CSPs to disk
                     workspace.Save(null);
@@ -90,7 +106,7 @@ namespace MexCLI.Commands
                     {
                         status = "progress",
                         percentage = 10,
-                        message = "CSP compression complete, workspace saved"
+                        message = "CSP compression complete"
                     };
                     Console.WriteLine(JsonSerializer.Serialize(compressionComplete));
                 }

@@ -28,6 +28,8 @@ namespace MexCLI
                         return Commands.GetFighterCostumesCommand.Execute(args);
                     case "import-costume":
                         return Commands.ImportCostumeCommand.Execute(args);
+                    case "remove-costume":
+                        return Commands.RemoveCostumeCommand.Execute(args);
                     case "save":
                         return Commands.SaveCommand.Execute(args);
                     case "export":
@@ -70,6 +72,7 @@ namespace MexCLI
             Console.WriteLine("  list-fighters <project.mexproj>            - List all fighters");
             Console.WriteLine("  get-costumes <project> <fighter>           - Get costumes for fighter");
             Console.WriteLine("  import-costume <project> <fighter> <zip>   - Import costume ZIP");
+            Console.WriteLine("  remove-costume <project> <fighter> <index> - Remove costume by index");
             Console.WriteLine("  save <project.mexproj>                     - Save project changes");
             Console.WriteLine("  export <project.mexproj> <output.iso>      - Export ISO");
             Console.WriteLine("  info <project.mexproj>                     - Get project information");
