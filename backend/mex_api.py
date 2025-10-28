@@ -259,6 +259,31 @@ def serve_mex_asset(asset_path):
         }), 500
 
 
+@app.route('/storage/<path:file_path>', methods=['GET'])
+def serve_storage(file_path):
+    """Serve files from storage folder (costumes, stages, screenshots, etc.)"""
+    try:
+        full_path = STORAGE_PATH / file_path
+
+        if not full_path.exists():
+            return jsonify({'success': False, 'error': f'File not found: {file_path}'}), 404
+
+        # Determine mimetype based on extension
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+            mimetype = 'image/png'
+        elif file_path.lower().endswith('.zip'):
+            mimetype = 'application/zip'
+        else:
+            mimetype = 'application/octet-stream'
+
+        return send_file(full_path, mimetype=mimetype)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/mex/import', methods=['POST'])
 def import_costume():
     """
@@ -584,10 +609,8 @@ def delete_storage_costume():
         # Delete physical files
         char_folder = STORAGE_PATH / character
         zip_file = char_folder / skin_to_delete['filename']
-
-        viewer_folder = VIEWER_STORAGE / character
-        csp_file = viewer_folder / f"{skin_id}_csp.png"
-        stc_file = viewer_folder / f"{skin_id}_stc.png"
+        csp_file = char_folder / f"{skin_id}_csp.png"
+        stc_file = char_folder / f"{skin_id}_stc.png"
 
         deleted_files = []
         if zip_file.exists():
@@ -846,19 +869,19 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
                     csp_data = source_zip.read(char_info['csp_file'])
                     dest_zip.writestr('csp.png', csp_data)
 
-                    # Also save to viewer/public/storage for preview
-                    viewer_char_folder = VIEWER_STORAGE / character
-                    viewer_char_folder.mkdir(parents=True, exist_ok=True)
-                    (viewer_char_folder / f"{skin_id}_csp.png").write_bytes(csp_data)
+                    # Save to storage for preview
+                    storage_char_folder = STORAGE_PATH / character
+                    storage_char_folder.mkdir(parents=True, exist_ok=True)
+                    (storage_char_folder / f"{skin_id}_csp.png").write_bytes(csp_data)
 
                 # Copy stock if found
                 if char_info['stock_file']:
                     stock_data = source_zip.read(char_info['stock_file'])
                     dest_zip.writestr('stc.png', stock_data)
 
-                    # Also save to viewer/public/storage for preview
-                    viewer_char_folder = VIEWER_STORAGE / character
-                    (viewer_char_folder / f"{skin_id}_stc.png").write_bytes(stock_data)
+                    # Save to storage for preview
+                    storage_char_folder = STORAGE_PATH / character
+                    (storage_char_folder / f"{skin_id}_stc.png").write_bytes(stock_data)
 
         # Update metadata
         if character not in metadata['characters']:
@@ -949,15 +972,8 @@ def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str) ->
                 screenshot_path = das_folder / f"{variant_id}_screenshot{screenshot_ext}"
                 screenshot_path.write_bytes(screenshot_data)
 
-                # Also save to viewer/public/storage for preview
-                viewer_das_folder = VIEWER_STORAGE / 'das' / stage_folder_name
-                viewer_das_folder.mkdir(parents=True, exist_ok=True)
-                viewer_screenshot_path = viewer_das_folder / f"{variant_id}_screenshot.png"
-                viewer_screenshot_path.write_bytes(screenshot_data)
-
                 has_screenshot = True
                 logger.info(f"✓ Saved screenshot: {screenshot_path}")
-                logger.info(f"✓ Saved viewer screenshot: {viewer_screenshot_path}")
 
         # Update metadata
         if stage_folder_name not in metadata['stages']:
@@ -1077,22 +1093,22 @@ def das_install():
             # Get paths
             original_stage = project_files / f"{stage_code}{file_ext}"
             loader_src = das_source / f"{stage_code}{file_ext}"
-            vanilla_in_folder = stage_folder / f"{stage_code}_00{file_ext}"
+            vanilla_in_folder = stage_folder / f"vanilla{file_ext}"
 
             # If vanilla variant doesn't exist yet and original stage exists, copy it into folder
             if not vanilla_in_folder.exists() and original_stage.exists():
                 shutil.copy2(original_stage, vanilla_in_folder)
-                logger.info(f"  Copied vanilla stage to {stage_code}/{stage_code}_00{file_ext}")
+                logger.info(f"  Copied vanilla stage to {stage_code}/vanilla{file_ext}")
 
-                # Copy default screenshot for vanilla variant
+                # Copy default screenshot for vanilla variant to storage
                 if stage_code in DAS_DEFAULT_SCREENSHOTS:
                     default_screenshot = PROJECT_ROOT / "utility" / "assets" / "stages" / DAS_DEFAULT_SCREENSHOTS[stage_code]
                     if default_screenshot.exists():
-                        viewer_das_folder = VIEWER_STORAGE / 'das' / stage_info['folder']
-                        viewer_das_folder.mkdir(parents=True, exist_ok=True)
-                        viewer_screenshot = viewer_das_folder / f"{stage_code}_00_screenshot.png"
-                        shutil.copy2(default_screenshot, viewer_screenshot)
-                        logger.info(f"  Copied default screenshot to {viewer_screenshot.name}")
+                        storage_das_folder = STORAGE_PATH / 'das' / stage_info['folder']
+                        storage_das_folder.mkdir(parents=True, exist_ok=True)
+                        storage_screenshot = storage_das_folder / f"vanilla_screenshot.png"
+                        shutil.copy2(default_screenshot, storage_screenshot)
+                        logger.info(f"  Copied default screenshot to storage: {storage_screenshot.name}")
 
             # Install DAS loader (replaces original stage file)
             if loader_src.exists():
@@ -1158,17 +1174,17 @@ def das_get_stage_variants(stage_code):
             file_pattern = '*.usd' if stage_code == 'GrPs' else '*.dat'
 
             for stage_file in stage_folder.glob(file_pattern):
-                # Check if screenshot exists in viewer storage
-                # Since we use mod names now, screenshot name matches the .dat filename
+                # Check if screenshot exists in storage (single source of truth)
+                # Screenshot name matches the .dat filename
                 # e.g., autumn-dreamland.dat → autumn-dreamland_screenshot.png
-                viewer_screenshot = VIEWER_STORAGE / 'das' / DAS_STAGES[stage_code]['folder'] / f"{stage_file.stem}_screenshot.png"
+                storage_screenshot = STORAGE_PATH / 'das' / DAS_STAGES[stage_code]['folder'] / f"{stage_file.stem}_screenshot.png"
 
                 variants.append({
                     'name': stage_file.stem,
                     'filename': stage_file.name,
                     'stageCode': stage_code,
-                    'hasScreenshot': viewer_screenshot.exists(),
-                    'screenshotUrl': f"/storage/das/{DAS_STAGES[stage_code]['folder']}/{stage_file.stem}_screenshot.png" if viewer_screenshot.exists() else None
+                    'hasScreenshot': storage_screenshot.exists(),
+                    'screenshotUrl': f"/storage/das/{DAS_STAGES[stage_code]['folder']}/{stage_file.stem}_screenshot.png" if storage_screenshot.exists() else None
                 })
 
         return jsonify({
@@ -1201,16 +1217,16 @@ def das_list_storage_variants():
                 for zip_file in stage_storage_path.glob('*.zip'):
                     variant_id = zip_file.stem
 
-                    # Check for screenshot in viewer/public/storage (where it's accessible)
-                    viewer_screenshot = VIEWER_STORAGE / 'das' / stage_info['folder'] / f"{variant_id}_screenshot.png"
+                    # Check for screenshot in storage (single source of truth)
+                    storage_screenshot = stage_storage_path / f"{variant_id}_screenshot.png"
 
                     variants.append({
                         'stageCode': code,
                         'stageName': stage_info['name'],
                         'name': variant_id,
                         'zipPath': str(zip_file.relative_to(PROJECT_ROOT)),
-                        'hasScreenshot': viewer_screenshot.exists(),
-                        'screenshotUrl': f"/storage/das/{stage_info['folder']}/{variant_id}_screenshot.png" if viewer_screenshot.exists() else None
+                        'hasScreenshot': storage_screenshot.exists(),
+                        'screenshotUrl': f"/storage/das/{stage_info['folder']}/{variant_id}_screenshot.png" if storage_screenshot.exists() else None
                     })
 
         return jsonify({
@@ -1360,11 +1376,11 @@ def das_remove_variant():
         variant_path.unlink()
         logger.info(f"DAS variant removed: {variant_path}")
 
-        # Also remove screenshot from viewer if it exists
-        viewer_screenshot = VIEWER_STORAGE / 'das' / DAS_STAGES[stage_code]['folder'] / f"{variant_name}_screenshot.png"
-        if viewer_screenshot.exists():
-            viewer_screenshot.unlink()
-            logger.info(f"Removed screenshot: {viewer_screenshot}")
+        # Also remove screenshot from storage if it exists
+        storage_screenshot = STORAGE_PATH / 'das' / DAS_STAGES[stage_code]['folder'] / f"{variant_name}_screenshot.png"
+        if storage_screenshot.exists():
+            storage_screenshot.unlink()
+            logger.info(f"Removed screenshot: {storage_screenshot}")
 
         return jsonify({
             'success': True,
@@ -1430,9 +1446,7 @@ def delete_storage_stage():
         # Delete physical files
         das_folder = STORAGE_PATH / 'das' / stage_folder
         zip_file = das_folder / variant_to_delete['filename']
-
-        viewer_das_folder = VIEWER_STORAGE / 'das' / stage_folder
-        screenshot_file = viewer_das_folder / f"{variant_id}_screenshot.png"
+        screenshot_file = das_folder / f"{variant_id}_screenshot.png"
 
         deleted_files = []
         if zip_file.exists():
@@ -1562,13 +1576,7 @@ def update_stage_screenshot():
         # Read the image data
         screenshot_data = screenshot_file.read()
 
-        # Save to viewer/public/storage for display
-        viewer_das_folder = VIEWER_STORAGE / 'das' / stage_folder
-        viewer_das_folder.mkdir(parents=True, exist_ok=True)
-        viewer_screenshot_path = viewer_das_folder / f"{variant_id}_screenshot.png"
-        viewer_screenshot_path.write_bytes(screenshot_data)
-
-        # Also save to storage/das as backup
+        # Save to storage/das
         das_folder = STORAGE_PATH / 'das' / stage_folder
         das_folder.mkdir(parents=True, exist_ok=True)
         storage_screenshot_path = das_folder / f"{variant_id}_screenshot.png"
