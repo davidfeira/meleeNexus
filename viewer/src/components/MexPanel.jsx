@@ -2,7 +2,17 @@ import React, { useState, useEffect } from 'react';
 import './MexPanel.css';
 import IsoBuilder from './IsoBuilder';
 
+const DAS_STAGES = [
+  { code: 'GrNBa', name: 'Battlefield', folder: 'battlefield', vanillaImage: '/vanilla/stages/battlefield.jpg' },
+  { code: 'GrNLa', name: 'Final Destination', folder: 'final_destination', vanillaImage: '/vanilla/stages/final destination.png' },
+  { code: 'GrSt', name: "Yoshi's Story", folder: 'yoshis_story', vanillaImage: '/vanilla/stages/Yoshis story.jpg' },
+  { code: 'GrOp', name: 'Dreamland', folder: 'dreamland', vanillaImage: '/vanilla/stages/dreamland.jpg' },
+  { code: 'GrPs', name: 'Pokemon Stadium', folder: 'pokemon_stadium', vanillaImage: '/vanilla/stages/pokemon stadium.jpg' },
+  { code: 'GrIz', name: 'Fountain of Dreams', folder: 'fountain_of_dreams', vanillaImage: '/vanilla/stages/Fountain of Dreams.webp' }
+];
+
 const MexPanel = () => {
+  const [mode, setMode] = useState('characters'); // 'characters' or 'stages'
   const [mexStatus, setMexStatus] = useState(null);
   const [fighters, setFighters] = useState([]);
   const [selectedFighter, setSelectedFighter] = useState(null);
@@ -11,11 +21,19 @@ const MexPanel = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [importing, setImporting] = useState(false);
-  const [importingCostume, setImportingCostume] = useState(null); // Track which costume is being imported
+  const [importingCostume, setImportingCostume] = useState(null);
   const [removing, setRemoving] = useState(false);
-  const [removingCostume, setRemovingCostume] = useState(null); // Track which costume is being removed
+  const [removingCostume, setRemovingCostume] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showIsoBuilder, setShowIsoBuilder] = useState(false);
+
+  // DAS state
+  const [dasInstalled, setDasInstalled] = useState(false);
+  const [dasChecking, setDasChecking] = useState(false);
+  const [selectedStage, setSelectedStage] = useState(null);
+  const [storageVariants, setStorageVariants] = useState([]);
+  const [mexVariants, setMexVariants] = useState([]);
+  const [mexVariantCounts, setMexVariantCounts] = useState({}); // { stageCode: count }
 
   const API_URL = 'http://127.0.0.1:5000/api/mex';
 
@@ -30,6 +48,20 @@ const MexPanel = () => {
       fetchMexCostumes(selectedFighter.name);
     }
   }, [selectedFighter]);
+
+  useEffect(() => {
+    if (mode === 'stages') {
+      checkDASInstallation();
+      fetchStorageVariants();
+      fetchAllMexVariantCounts();
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (selectedStage && dasInstalled) {
+      fetchMexVariants(selectedStage.code);
+    }
+  }, [selectedStage, dasInstalled]);
 
   const fetchMexStatus = async () => {
     try {
@@ -201,6 +233,170 @@ const MexPanel = () => {
     return storageCostumes.filter(c => c.character === fighterName);
   };
 
+  // DAS Functions
+  const checkDASInstallation = async () => {
+    setDasChecking(true);
+    try {
+      const response = await fetch(`${API_URL}/das/status`);
+      const data = await response.json();
+      if (data.success) {
+        setDasInstalled(data.installed);
+      }
+    } catch (err) {
+      console.error('Failed to check DAS status:', err);
+    } finally {
+      setDasChecking(false);
+    }
+  };
+
+  const installDAS = async () => {
+    if (!confirm('Install Dynamic Alternate Stages framework? This will modify stage files in your MEX project.')) {
+      return;
+    }
+
+    setDasChecking(true);
+    try {
+      const response = await fetch(`${API_URL}/das/install`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        alert('DAS framework installed successfully!');
+        setDasInstalled(true);
+        fetchStorageVariants();
+      } else {
+        alert(`DAS installation failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('DAS installation error:', err);
+      alert(`DAS installation error: ${err.message}`);
+    } finally {
+      setDasChecking(false);
+    }
+  };
+
+  const fetchStorageVariants = async () => {
+    try {
+      const response = await fetch(`${API_URL}/das/storage/variants`);
+      const data = await response.json();
+      if (data.success) {
+        setStorageVariants(data.variants);
+      }
+    } catch (err) {
+      console.error('Failed to fetch storage variants:', err);
+    }
+  };
+
+  const fetchMexVariants = async (stageCode) => {
+    try {
+      const response = await fetch(`${API_URL}/das/stages/${stageCode}/variants`);
+      const data = await response.json();
+      if (data.success) {
+        setMexVariants(data.variants || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch MEX variants:', err);
+      setMexVariants([]);
+    }
+  };
+
+  const fetchAllMexVariantCounts = async () => {
+    try {
+      const counts = {};
+      await Promise.all(
+        DAS_STAGES.map(async (stage) => {
+          const response = await fetch(`${API_URL}/das/stages/${stage.code}/variants`);
+          const data = await response.json();
+          if (data.success) {
+            counts[stage.code] = data.variants?.length || 0;
+          }
+        })
+      );
+      setMexVariantCounts(counts);
+    } catch (err) {
+      console.error('Failed to fetch MEX variant counts:', err);
+    }
+  };
+
+  const handleImportVariant = async (variant) => {
+    if (importing) return;
+
+    setImporting(true);
+    setImportingCostume(variant.zipPath);
+
+    try {
+      const response = await fetch(`${API_URL}/das/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stageCode: variant.stageCode,
+          variantPath: variant.zipPath
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log(`✓ Successfully imported variant to ${variant.stageName}`);
+        setRefreshing(true);
+        await fetchMexVariants(selectedStage.code);
+        await fetchAllMexVariantCounts();
+        setRefreshing(false);
+      } else {
+        alert(`Import failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('Import error:', err);
+      alert(`Import error: ${err.message}`);
+    } finally {
+      setImporting(false);
+      setImportingCostume(null);
+    }
+  };
+
+  const handleRemoveVariant = async (stageCode, variantName) => {
+    if (removing) return;
+
+    if (!confirm(`Are you sure you want to remove "${variantName}"?`)) {
+      return;
+    }
+
+    setRemoving(true);
+
+    try {
+      const response = await fetch(`${API_URL}/das/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stageCode: stageCode,
+          variantName: variantName
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log(`✓ Successfully removed "${variantName}"`);
+        setRefreshing(true);
+        await fetchMexVariants(selectedStage.code);
+        await fetchAllMexVariantCounts();
+        setRefreshing(false);
+      } else {
+        alert(`Remove failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('Remove error:', err);
+      alert(`Remove error: ${err.message}`);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const getVariantsForStage = (stageCode) => {
+    return storageVariants.filter(v => v.stageCode === stageCode);
+  };
+
   if (loading) {
     return <div className="mex-panel loading">Loading MEX Manager...</div>;
   }
@@ -243,24 +439,30 @@ const MexPanel = () => {
         </button>
       </div>
 
-      {mexStatus?.counts && (
-        <div className="mex-stats">
-          <div className="stat">
-            <span className="stat-value">{mexStatus.counts.fighters}</span>
-            <span className="stat-label">Fighters</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">{mexStatus.counts.stages}</span>
-            <span className="stat-label">Stages</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">{mexStatus.counts.music}</span>
-            <span className="stat-label">Music</span>
-          </div>
-        </div>
-      )}
+      {/* Mode Switcher */}
+      <div className="mode-switcher">
+        <button
+          className={`mode-btn ${mode === 'characters' ? 'active' : ''}`}
+          onClick={() => {
+            setMode('characters');
+            setSelectedStage(null);
+          }}
+        >
+          Characters
+        </button>
+        <button
+          className={`mode-btn ${mode === 'stages' ? 'active' : ''}`}
+          onClick={() => {
+            setMode('stages');
+            setSelectedFighter(null);
+          }}
+        >
+          Stages
+        </button>
+      </div>
 
-      <div className="mex-content">
+      {mode === 'characters' ? (
+        <div className="mex-content">
         <div className="fighters-list">
           <h3>Fighters ({fighters.length})</h3>
           <div className="fighter-items">
@@ -391,6 +593,135 @@ const MexPanel = () => {
           )}
         </div>
       </div>
+      ) : (
+        // Stages Mode
+        <div className="mex-content">
+          {!dasInstalled ? (
+            <div className="das-install-prompt">
+              <h3>Dynamic Alternate Stages Not Installed</h3>
+              <p>Install the DAS framework to manage alternate stage variants for your 6 competitive stages.</p>
+              <button
+                className="btn-primary"
+                onClick={installDAS}
+                disabled={dasChecking}
+              >
+                {dasChecking ? 'Installing...' : 'Install DAS Framework'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="fighters-list">
+                <h3>Stages ({DAS_STAGES.length})</h3>
+                <div className="fighter-items">
+                  {DAS_STAGES.map(stage => {
+                    const availableVariants = getVariantsForStage(stage.code);
+                    const mexCount = mexVariantCounts[stage.code] || 0;
+                    return (
+                      <div
+                        key={stage.code}
+                        className={`fighter-item ${selectedStage?.code === stage.code ? 'selected' : ''}`}
+                        onClick={() => setSelectedStage(stage)}
+                      >
+                        <div className="fighter-name">{stage.name}</div>
+                        <div className="fighter-info">
+                          <span className="costume-count">{mexCount} in MEX</span>
+                          {availableVariants.length > 0 && (
+                            <span className="available-count">{availableVariants.length} available</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className={`costumes-panel ${refreshing ? 'refreshing' : ''}`}>
+                {selectedStage ? (
+                  <>
+                    <div className="costumes-section">
+                      <h3>Already in MEX ({mexVariants.length})</h3>
+                      <div className="costume-list existing">
+                        {mexVariants.map((variant, idx) => (
+                          <div key={idx} className="costume-card existing-costume">
+                            <div className="costume-preview">
+                              {variant.hasScreenshot && (
+                                <img
+                                  src={variant.screenshotUrl}
+                                  alt={variant.name}
+                                  onError={(e) => e.target.style.display = 'none'}
+                                />
+                              )}
+                              <button
+                                className="btn-remove"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveVariant(selectedStage.code, variant.name);
+                                }}
+                                disabled={removing}
+                                title="Remove variant"
+                              >
+                                ×
+                              </button>
+                            </div>
+                            <div className="costume-info">
+                              <h4>{variant.name}</h4>
+                              <p className="costume-file">{variant.filename}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {mexVariants.length === 0 && (
+                          <div className="no-costumes">
+                            <p>No variants in MEX yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="costumes-section">
+                      <h3>Available to Import</h3>
+                      <div className="costume-list">
+                        {getVariantsForStage(selectedStage.code).map((variant, idx) => (
+                          <div key={idx} className="costume-card">
+                            <div className="costume-preview">
+                              {variant.hasScreenshot && (
+                                <img
+                                  src={variant.screenshotUrl}
+                                  alt={variant.name}
+                                  onError={(e) => e.target.style.display = 'none'}
+                                />
+                              )}
+                            </div>
+                            <div className="costume-info">
+                              <h4>{variant.name}</h4>
+                              <p className="costume-code">{selectedStage.name}</p>
+                              <button
+                                className="btn-add"
+                                onClick={() => handleImportVariant(variant)}
+                                disabled={importing}
+                              >
+                                {importingCostume === variant.zipPath ? 'Importing...' : importing ? 'Wait...' : 'Add to MEX'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {getVariantsForStage(selectedStage.code).length === 0 && (
+                          <div className="no-costumes">
+                            <p>No variants available in storage for {selectedStage.name}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="no-selection">
+                    <p>Select a stage to view variants</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {showIsoBuilder && (
         <IsoBuilder onClose={() => setShowIsoBuilder(false)} />

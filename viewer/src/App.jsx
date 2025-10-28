@@ -38,7 +38,7 @@ function App() {
             className={`tab ${activeTab === 'storage' ? 'active' : ''}`}
             onClick={() => setActiveTab('storage')}
           >
-            Costume Vault
+            Vault
           </button>
           <button
             className={`tab ${activeTab === 'mex' ? 'active' : ''}`}

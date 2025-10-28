@@ -99,6 +99,9 @@ namespace mexLib.Types
         [Browsable(false)]
         public MexPlaylist Playlist { get; set; } = new MexPlaylist();
 
+        [Browsable(false)]
+        public ObservableCollection<MexDASStage> AlternateStages { get; set; } = new ObservableCollection<MexDASStage>();
+
         public override string ToString() => Name;
 
         /// <summary>
@@ -402,7 +405,7 @@ namespace mexLib.Types
             return null;
         }
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="ws"></param>
         public void Delete(MexWorkspace ws)
@@ -414,6 +417,13 @@ namespace mexLib.Types
                 ws.FileManager.Remove(ws.GetFilePath(f));
 
             Assets.Delete(ws);
+
+            // Delete all DAS alternate stages
+            foreach (MexDASStage dasStage in AlternateStages)
+            {
+                dasStage.DeleteFile(ws);
+                dasStage.DeleteAssets(ws);
+            }
         }
     }
 }
