@@ -62,16 +62,19 @@
   50% { opacity: 0.5; }
 }
 
-.mex-header-actions {
+.mex-actions {
   padding: 0.75rem 1rem;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   background: #1e1e1e;
   border-bottom: 1px solid #333;
+  position: relative;
 }
 
-.action-buttons {
+.action-buttons-group {
+  position: absolute;
+  left: 1rem;
   display: flex;
   gap: 8px;
 }
@@ -699,6 +702,10 @@
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .recent-project-item:hover {
@@ -857,12 +864,39 @@
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .recent-project-item-modal:hover {
   border-color: #667eea;
   background: rgba(102, 126, 234, 0.1);
   transform: translateX(4px);
+}
+
+.recent-project-remove {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.recent-project-remove:hover {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
 }
 
 .project-options-modal {

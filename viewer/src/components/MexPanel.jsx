@@ -87,6 +87,21 @@ const MexPanel = () => {
     }
   };
 
+  const removeFromRecentProjects = (projectPath) => {
+    try {
+      const stored = localStorage.getItem('mex_recent_projects');
+      let projects = stored ? JSON.parse(stored) : [];
+
+      // Remove the specified project
+      projects = projects.filter(p => p.path !== projectPath);
+
+      localStorage.setItem('mex_recent_projects', JSON.stringify(projects));
+      setRecentProjects(projects);
+    } catch (err) {
+      console.error('Failed to remove recent project:', err);
+    }
+  };
+
   useEffect(() => {
     fetchMexStatus();
     loadRecentProjects();
@@ -854,6 +869,16 @@ const MexPanel = () => {
         console.log('✓ Project opened:', data.project.name);
         addToRecentProjects(projectPath, data.project.name);
         await fetchMexStatus();
+
+        // Refresh data for new project
+        setRefreshing(true);
+        await Promise.all([
+          fetchFighters(),
+          fetchStorageCostumes()
+        ]);
+        setRefreshing(false);
+        setSelectedFighter(null); // Clear fighter selection
+
         setShowProjectModal(false); // Close modal on success
       } else {
         alert(`Failed to open project: ${data.error}`);
@@ -899,6 +924,16 @@ const MexPanel = () => {
         console.log('✓ Project opened:', data.project.name);
         addToRecentProjects(filePath, data.project.name);
         await fetchMexStatus();
+
+        // Refresh data for new project
+        setRefreshing(true);
+        await Promise.all([
+          fetchFighters(),
+          fetchStorageCostumes()
+        ]);
+        setRefreshing(false);
+        setSelectedFighter(null); // Clear fighter selection
+
         setShowProjectModal(false); // Close modal on success
       } else {
         alert(`Failed to open project: ${data.error}`);
@@ -1023,8 +1058,20 @@ const MexPanel = () => {
                     className="recent-project-item"
                     onClick={() => handleOpenProjectFromPath(project.path)}
                   >
-                    <div className="recent-project-name">{project.name}</div>
-                    <div className="recent-project-path">{project.path}</div>
+                    <div>
+                      <div className="recent-project-name">{project.name}</div>
+                      <div className="recent-project-path">{project.path}</div>
+                    </div>
+                    <button
+                      className="recent-project-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromRecentProjects(project.path);
+                      }}
+                      title="Remove from recent"
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1075,8 +1122,8 @@ const MexPanel = () => {
         )}
       </div>
 
-      <div className="mex-header-actions">
-        <div className="action-buttons">
+      <div className="mex-actions">
+        <div className="action-buttons-group">
           <button
             className="action-btn"
             onClick={() => setShowIsoBuilder(true)}
@@ -1485,8 +1532,20 @@ const MexPanel = () => {
                       className="recent-project-item-modal"
                       onClick={() => handleOpenProjectFromPath(project.path)}
                     >
-                      <div className="recent-project-name">{project.name}</div>
-                      <div className="recent-project-path">{project.path}</div>
+                      <div>
+                        <div className="recent-project-name">{project.name}</div>
+                        <div className="recent-project-path">{project.path}</div>
+                      </div>
+                      <button
+                        className="recent-project-remove"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFromRecentProjects(project.path);
+                        }}
+                        title="Remove from recent"
+                      >
+                        ×
+                      </button>
                     </div>
                   ))}
                 </div>

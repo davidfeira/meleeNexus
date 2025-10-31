@@ -918,7 +918,6 @@ export default function StorageViewer({ metadata, onRefresh }) {
                           src={variant.screenshotUrl}
                           alt={variant.name}
                           className="skin-csp"
-                          style={{ width: '100%', height: 'auto' }}
                           onError={(e) => {
                             e.target.style.display = 'none'
                             e.target.nextSibling.style.display = 'flex'
@@ -1196,7 +1195,6 @@ export default function StorageViewer({ metadata, onRefresh }) {
                     src={vanillaImagePath}
                     alt={stage.name}
                     className="character-csp"
-                    style={{ objectFit: 'cover' }}
                     onError={(e) => {
                       e.target.style.display = 'none'
                       e.target.nextSibling.style.display = 'flex'

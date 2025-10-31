@@ -1446,6 +1446,158 @@ def clear_storage_endpoint():
         }), 500
 
 
+@app.route('/api/mex/storage/backup', methods=['POST'])
+def backup_vault():
+    """Create a backup ZIP of the entire storage vault"""
+    try:
+        logger.info("=== VAULT BACKUP REQUEST ===")
+
+        # Create backups directory if it doesn't exist
+        backups_dir = PROJECT_ROOT / "output" / "vault_backups"
+        backups_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create timestamped backup filename
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_filename = f"vault_backup_{timestamp}.zip"
+        backup_path = backups_dir / backup_filename
+
+        logger.info(f"Creating backup: {backup_path}")
+
+        # Create ZIP archive of storage directory
+        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Walk through storage directory and add all files
+            for root, dirs, files in os.walk(STORAGE_PATH):
+                for file in files:
+                    file_path = Path(root) / file
+                    # Create archive path relative to storage directory
+                    arcname = file_path.relative_to(STORAGE_PATH)
+                    zipf.write(file_path, arcname)
+
+        backup_size = backup_path.stat().st_size
+        logger.info(f"Backup created successfully: {backup_size} bytes")
+        logger.info("=== VAULT BACKUP COMPLETE ===")
+
+        return jsonify({
+            'success': True,
+            'filename': backup_filename,
+            'size': backup_size,
+            'path': str(backup_path)
+        })
+    except Exception as e:
+        logger.error(f"Vault backup error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/storage/backup/download/<filename>', methods=['GET'])
+def download_backup(filename):
+    """Download a backup file"""
+    try:
+        backups_dir = PROJECT_ROOT / "output" / "vault_backups"
+        backup_path = backups_dir / filename
+
+        if not backup_path.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Backup file not found'
+            }), 404
+
+        return send_file(
+            backup_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/zip'
+        )
+    except Exception as e:
+        logger.error(f"Backup download error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/storage/restore', methods=['POST'])
+def restore_vault():
+    """Restore vault from a backup ZIP file"""
+    try:
+        logger.info("=== VAULT RESTORE REQUEST ===")
+
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No backup file uploaded'
+            }), 400
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+
+        if not file.filename.lower().endswith('.zip'):
+            return jsonify({
+                'success': False,
+                'error': 'Only ZIP files are supported'
+            }), 400
+
+        # Get restore mode: 'replace' or 'merge'
+        restore_mode = request.form.get('mode', 'replace')
+
+        # Save uploaded backup to temp location
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
+            file.save(tmp.name)
+            tmp_path = Path(tmp.name)
+
+        try:
+            # Validate backup structure
+            with zipfile.ZipFile(tmp_path, 'r') as zipf:
+                file_list = zipf.namelist()
+
+                # Check if metadata.json exists in backup
+                if 'metadata.json' not in file_list:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Invalid backup file: metadata.json not found'
+                    }), 400
+
+            logger.info(f"Restore mode: {restore_mode}")
+
+            # If replace mode, clear existing storage first
+            if restore_mode == 'replace':
+                logger.info("Clearing existing storage...")
+                if STORAGE_PATH.exists():
+                    shutil.rmtree(STORAGE_PATH)
+                STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+
+            # Extract backup to storage directory
+            logger.info("Extracting backup...")
+            with zipfile.ZipFile(tmp_path, 'r') as zipf:
+                zipf.extractall(STORAGE_PATH)
+
+            logger.info("=== VAULT RESTORE COMPLETE ===")
+
+            return jsonify({
+                'success': True,
+                'message': f'Vault restored successfully ({restore_mode} mode)',
+                'mode': restore_mode
+            })
+        finally:
+            # Clean up temp file
+            if tmp_path.exists():
+                tmp_path.unlink()
+    except Exception as e:
+        logger.error(f"Vault restore error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # REMOVED: Old intake/import endpoint - replaced with unified /api/mex/import/file endpoint
 
 
