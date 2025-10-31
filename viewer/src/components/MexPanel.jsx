@@ -31,6 +31,9 @@ const MexPanel = () => {
   const [showIsoBuilder, setShowIsoBuilder] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [recentProjects, setRecentProjects] = useState([]);
+  const [selectedCostumes, setSelectedCostumes] = useState(new Set());
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
 
   // DAS state
   const [dasInstalled, setDasInstalled] = useState(false);
@@ -957,6 +960,11 @@ const MexPanel = () => {
                                 alt="Stock"
                                 onError={(e) => e.target.style.display = 'none'}
                               />
+                            </div>
+                          )}
+                          {costume.slippiSafe && (
+                            <div className="slippi-badge" title="Slippi Safe">
+                              ✓
                             </div>
                           )}
                         </div>

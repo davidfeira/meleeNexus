@@ -657,7 +657,9 @@ def list_storage_costumes():
                         'isPopo': skin.get('is_popo', False),
                         'isNana': skin.get('is_nana', False),
                         'pairedNanaId': skin.get('paired_nana_id'),
-                        'pairedPopoId': skin.get('paired_popo_id')
+                        'pairedPopoId': skin.get('paired_popo_id'),
+                        # Slippi safety
+                        'slippiSafe': skin.get('slippi_safe', False)
                     }
                     costumes.append(costume_data)
 
