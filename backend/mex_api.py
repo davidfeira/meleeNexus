@@ -1739,16 +1739,20 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         # Try to extract custom name from filename
         custom_name = extract_custom_name_from_filename(original_filename, character)
 
-        # Sanitize color name: replace spaces and slashes with hyphens
-        color_safe = char_info['color'].lower().replace(' ', '-').replace('/', '-')
+        # Extract descriptive name from DAT filename (remove .dat extension and clean up)
+        dat_basename = os.path.splitext(os.path.basename(char_info['dat_file']))[0]
+        # Clean and sanitize: lowercase, replace spaces/special chars with hyphens
+        dat_name_clean = re.sub(r'[^\w\s-]', '', dat_basename)  # Remove special chars except space and hyphen
+        dat_name_clean = re.sub(r'[\s_]+', '-', dat_name_clean)  # Replace spaces/underscores with hyphens
+        dat_name_clean = dat_name_clean.lower().strip('-')  # Lowercase and remove leading/trailing hyphens
 
-        # Generate base ID: use custom name if found, otherwise use character name
+        # Generate base ID: use custom name if found, otherwise use DAT filename
         if custom_name:
-            base_id = f"{custom_name}-{color_safe}"
+            base_id = f"{custom_name}-{dat_name_clean}"
             logger.info(f"Using custom name from filename: '{custom_name}' -> '{base_id}'")
         else:
-            base_id = f"{character.lower().replace(' ', '-')}-{color_safe}"
-            logger.info(f"Using default naming: '{base_id}'")
+            base_id = dat_name_clean
+            logger.info(f"Using DAT filename as name: '{base_id}'")
 
         # Handle duplicates: append 2-digit counter without dash (e.g., "name01", "name02")
         skin_id = base_id
@@ -1939,7 +1943,7 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         # Build skin entry
         skin_entry = {
             'id': skin_id,
-            'color': char_info['color'],
+            'color': dat_name_clean,  # Use descriptive DAT filename instead of generic color
             'costume_code': char_info['costume_code'],
             'filename': f"{skin_id}.zip",
             'has_csp': csp_data is not None,
@@ -1981,9 +1985,9 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
             'success': True,
             'type': 'character',
             'character': character,
-            'color': char_info['color'],
+            'color': dat_name_clean,  # Use descriptive name
             'skin_id': skin_id,  # Return the actual skin ID for pairing
-            'message': f"Imported {character} - {char_info['color']} costume"
+            'message': f"Imported {character} - {dat_name_clean} costume"
         }
 
     except Exception as e:

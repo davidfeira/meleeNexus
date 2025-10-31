@@ -49,12 +49,46 @@ def extract_costume_code_from_filename(filename: str) -> Optional[str]:
     return None
 
 
-def build_image_indexes(filenames: list) -> tuple:
+def get_image_dimensions(archive, filename, is_7z=False):
+    """
+    Get dimensions of an image from an archive without fully extracting it.
+
+    Args:
+        archive: The open archive (ZipFile or SevenZipFile)
+        filename: The filename inside the archive
+        is_7z: Whether this is a 7z archive
+
+    Returns:
+        Tuple of (width, height) or None if unable to read
+    """
+    try:
+        from PIL import Image
+        import io
+
+        # Read image data from archive
+        if is_7z:
+            file_data = archive.read([filename])
+            image_bytes = file_data[filename].read()
+        else:
+            image_bytes = archive.read(filename)
+
+        # Open with PIL to get dimensions
+        img = Image.open(io.BytesIO(image_bytes))
+        dimensions = img.size
+        img.close()
+        return dimensions
+    except Exception as e:
+        return None
+
+
+def build_image_indexes(archive, filenames: list, is_7z=False) -> tuple:
     """
     Build dual indexes for CSPs and stocks from ZIP file list.
 
     Args:
+        archive: The open archive (ZipFile or SevenZipFile)
         filenames: List of all filenames in ZIP
+        is_7z: Whether this is a 7z archive
 
     Returns:
         Tuple of (csps_by_name, csps_by_path, csps_by_costume, stocks_by_name, stocks_by_path, stocks_by_costume)
@@ -68,6 +102,10 @@ def build_image_indexes(filenames: list) -> tuple:
     stocks_by_costume = {}  # costume_code -> list of file info
 
     image_extensions = {'.png', '.jpg', '.jpeg'}
+
+    # Target aspect ratios
+    CSP_ASPECT_RATIO = 136 / 188  # 0.723 (portrait)
+    STOCK_ASPECT_RATIO = 1.0  # Square-ish
 
     for filename in filenames:
         ext = os.path.splitext(filename)[1].lower()
@@ -83,11 +121,29 @@ def build_image_indexes(filenames: list) -> tuple:
             # Normalize to consistent case for indexing
             costume_code = costume_code.upper()
 
+        # Get image dimensions and aspect ratio
+        dimensions = get_image_dimensions(archive, filename, is_7z)
+        aspect_ratio = None
+        aspect_ratio_score_csp = float('inf')
+        aspect_ratio_score_stock = float('inf')
+
+        if dimensions:
+            width, height = dimensions
+            if height > 0:
+                aspect_ratio = width / height
+                # Calculate how close this image is to ideal CSP/stock ratios
+                aspect_ratio_score_csp = abs(aspect_ratio - CSP_ASPECT_RATIO)
+                aspect_ratio_score_stock = abs(aspect_ratio - STOCK_ASPECT_RATIO)
+
         info = {
             'filename': filename,
             'folder': folder,
             'basename': basename,
-            'costume_code': costume_code
+            'costume_code': costume_code,
+            'dimensions': dimensions,
+            'aspect_ratio': aspect_ratio,
+            'aspect_ratio_score_csp': aspect_ratio_score_csp,
+            'aspect_ratio_score_stock': aspect_ratio_score_stock
         }
 
         # Determine if CSP or stock by filename patterns
@@ -109,14 +165,25 @@ def build_image_indexes(filenames: list) -> tuple:
                     stocks_by_costume[costume_code] = []
                 stocks_by_costume[costume_code].append(info)
         else:
-            # Default: treat as potential CSP if no clear stock indicator
-            csps_by_name[basename] = info
-            csps_by_path[filename] = info
-            # Add to costume index
-            if costume_code:
-                if costume_code not in csps_by_costume:
-                    csps_by_costume[costume_code] = []
-                csps_by_costume[costume_code].append(info)
+            # Default: Check aspect ratio to determine if CSP or stock
+            # If aspect ratio is closer to CSP (portrait), treat as CSP
+            # If closer to stock (square), treat as stock
+            if aspect_ratio_score_csp < aspect_ratio_score_stock:
+                csps_by_name[basename] = info
+                csps_by_path[filename] = info
+                # Add to costume index
+                if costume_code:
+                    if costume_code not in csps_by_costume:
+                        csps_by_costume[costume_code] = []
+                    csps_by_costume[costume_code].append(info)
+            else:
+                stocks_by_name[basename] = info
+                stocks_by_path[filename] = info
+                # Add to costume index
+                if costume_code:
+                    if costume_code not in stocks_by_costume:
+                        stocks_by_costume[costume_code] = []
+                    stocks_by_costume[costume_code].append(info)
 
     return csps_by_name, csps_by_path, csps_by_costume, stocks_by_name, stocks_by_path, stocks_by_costume
 
@@ -170,7 +237,7 @@ def detect_character_from_zip(zip_path: str) -> List[Dict]:
             return []
 
         # Build dual indexes for smart matching
-        csps_by_name, csps_by_path, csps_by_costume, stocks_by_name, stocks_by_path, stocks_by_costume = build_image_indexes(filenames)
+        csps_by_name, csps_by_path, csps_by_costume, stocks_by_name, stocks_by_path, stocks_by_costume = build_image_indexes(archive, filenames, is_7z)
 
         results = []
         import tempfile
@@ -232,38 +299,43 @@ def detect_character_from_zip(zip_path: str) -> List[Dict]:
                         break
 
                 # Tier 1: Costume code match
-                if costume_code:
+                if not csp_file and costume_code:
                     costume_code_upper = costume_code.upper()
                     if costume_code_upper in csps_by_costume:
                         candidates = csps_by_costume[costume_code_upper]
                         # Filter out already-used CSPs
                         available_candidates = [c for c in candidates if c['filename'] not in used_csp_files]
                         if available_candidates:
-                            # If multiple CSPs match, prefer same folder
+                            # Sort by aspect ratio score (best match first)
+                            available_candidates.sort(key=lambda x: x['aspect_ratio_score_csp'])
+
+                            # If multiple CSPs match, prefer same folder with best aspect ratio
                             same_folder = [c for c in available_candidates if c['folder'] == dat_folder]
                             if same_folder:
                                 csp_file = same_folder[0]['filename']
                             else:
-                                # Use first available match
+                                # Use best aspect ratio match
                                 csp_file = available_candidates[0]['filename']
 
                 # Tier 2: Same-folder match
                 if not csp_file:
-
                     if dats_in_folder == 1:
-                        # Only 1 DAT in this folder - match any CSP from same folder
-                        for csp_path, csp_info in csps_by_path.items():
-                            if csp_info['folder'] == dat_folder and csp_path not in used_csp_files:
-                                csp_file = csp_info['filename']
-                                break
+                        # Only 1 DAT in this folder - match CSP from same folder with best aspect ratio
+                        same_folder_csps = [info for path, info in csps_by_path.items()
+                                          if info['folder'] == dat_folder and path not in used_csp_files]
+                        if same_folder_csps:
+                            # Sort by aspect ratio score (best match first)
+                            same_folder_csps.sort(key=lambda x: x['aspect_ratio_score_csp'])
+                            csp_file = same_folder_csps[0]['filename']
 
                 # Tier 3: Global fallback (single DAT in entire ZIP)
                 if not csp_file and len(dat_files) == 1 and csps_by_path:
-                    # Take first available CSP
-                    for csp_path, csp_info in csps_by_path.items():
-                        if csp_path not in used_csp_files:
-                            csp_file = csp_info['filename']
-                            break
+                    # Take CSP with best aspect ratio
+                    available_csps = [info for path, info in csps_by_path.items() if path not in used_csp_files]
+                    if available_csps:
+                        # Sort by aspect ratio score (best match first)
+                        available_csps.sort(key=lambda x: x['aspect_ratio_score_csp'])
+                        csp_file = available_csps[0]['filename']
 
                 # FOUR-TIER MATCHING for Stock
                 stock_file = None
@@ -281,36 +353,42 @@ def detect_character_from_zip(zip_path: str) -> List[Dict]:
                         break
 
                 # Tier 1: Costume code match
-                if costume_code:
+                if not stock_file and costume_code:
                     costume_code_upper = costume_code.upper()
                     if costume_code_upper in stocks_by_costume:
                         candidates = stocks_by_costume[costume_code_upper]
                         # Filter out already-used stocks
                         available_candidates = [c for c in candidates if c['filename'] not in used_stock_files]
                         if available_candidates:
-                            # If multiple stocks match, prefer same folder
+                            # Sort by aspect ratio score (best match first)
+                            available_candidates.sort(key=lambda x: x['aspect_ratio_score_stock'])
+
+                            # If multiple stocks match, prefer same folder with best aspect ratio
                             same_folder = [c for c in available_candidates if c['folder'] == dat_folder]
                             if same_folder:
                                 stock_file = same_folder[0]['filename']
                             else:
-                                # Use first available match
+                                # Use best aspect ratio match
                                 stock_file = available_candidates[0]['filename']
 
                 # Tier 2: Same-folder match
                 if not stock_file and dats_in_folder == 1:
-                    # Only 1 DAT in this folder - match any stock from same folder
-                    for stock_path, stock_info in stocks_by_path.items():
-                        if stock_info['folder'] == dat_folder and stock_path not in used_stock_files:
-                            stock_file = stock_info['filename']
-                            break
+                    # Only 1 DAT in this folder - match stock from same folder with best aspect ratio
+                    same_folder_stocks = [info for path, info in stocks_by_path.items()
+                                        if info['folder'] == dat_folder and path not in used_stock_files]
+                    if same_folder_stocks:
+                        # Sort by aspect ratio score (best match first)
+                        same_folder_stocks.sort(key=lambda x: x['aspect_ratio_score_stock'])
+                        stock_file = same_folder_stocks[0]['filename']
 
                 # Tier 3: Global fallback (single DAT in entire ZIP)
                 if not stock_file and len(dat_files) == 1 and stocks_by_path:
-                    # Take first available stock
-                    for stock_path, stock_info in stocks_by_path.items():
-                        if stock_path not in used_stock_files:
-                            stock_file = stock_info['filename']
-                            break
+                    # Take stock with best aspect ratio
+                    available_stocks = [info for path, info in stocks_by_path.items() if path not in used_stock_files]
+                    if available_stocks:
+                        # Sort by aspect ratio score (best match first)
+                        available_stocks.sort(key=lambda x: x['aspect_ratio_score_stock'])
+                        stock_file = available_stocks[0]['filename']
 
                 # Normalize character name
                 if character in ['Ice Climbers (Nana)', 'Ice Climbers (Popo)']:
