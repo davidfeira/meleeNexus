@@ -3,12 +3,12 @@ import './MexPanel.css';
 import IsoBuilder from './IsoBuilder';
 
 const DAS_STAGES = [
-  { code: 'GrNBa', name: 'Battlefield', folder: 'battlefield', vanillaImage: '/vanilla/stages/battlefield.jpg' },
-  { code: 'GrNLa', name: 'Final Destination', folder: 'final_destination', vanillaImage: '/vanilla/stages/final destination.png' },
-  { code: 'GrSt', name: "Yoshi's Story", folder: 'yoshis_story', vanillaImage: '/vanilla/stages/Yoshis story.jpg' },
   { code: 'GrOp', name: 'Dreamland', folder: 'dreamland', vanillaImage: '/vanilla/stages/dreamland.jpg' },
   { code: 'GrPs', name: 'Pokemon Stadium', folder: 'pokemon_stadium', vanillaImage: '/vanilla/stages/pokemon stadium.jpg' },
-  { code: 'GrIz', name: 'Fountain of Dreams', folder: 'fountain_of_dreams', vanillaImage: '/vanilla/stages/Fountain of Dreams.webp' }
+  { code: 'GrSt', name: "Yoshi's Story", folder: 'yoshis_story', vanillaImage: '/vanilla/stages/Yoshis story.jpg' },
+  { code: 'GrNBa', name: 'Battlefield', folder: 'battlefield', vanillaImage: '/vanilla/stages/battlefield.jpg' },
+  { code: 'GrIz', name: 'Fountain of Dreams', folder: 'fountain_of_dreams', vanillaImage: '/vanilla/stages/Fountain of Dreams.webp' },
+  { code: 'GrNLa', name: 'Final Destination', folder: 'final_destination', vanillaImage: '/vanilla/stages/final destination.png' }
 ];
 
 const MexPanel = () => {
@@ -1361,34 +1361,43 @@ const MexPanel = () => {
                     <div className="costumes-section">
                       <h3>Already in MEX ({mexVariants.length})</h3>
                       <div className="costume-list existing">
-                        {mexVariants.map((variant, idx) => (
-                          <div key={idx} className="costume-card existing-costume">
-                            <div className="costume-preview">
-                              {variant.hasScreenshot && (
-                                <img
-                                  src={variant.screenshotUrl}
-                                  alt={variant.name}
-                                  onError={(e) => e.target.style.display = 'none'}
-                                />
-                              )}
-                              <button
-                                className="btn-remove"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveVariant(selectedStage.code, variant.name);
-                                }}
-                                disabled={removing}
-                                title="Remove variant"
-                              >
-                                ×
-                              </button>
+                        {mexVariants.map((variant, idx) => {
+                          // Use vanilla image for vanilla.dat and vanilla.usd stages
+                          const isVanilla = variant.filename === 'vanilla.dat' || variant.filename === 'vanilla.usd';
+                          const imageUrl = isVanilla
+                            ? selectedStage.vanillaImage
+                            : variant.screenshotUrl;
+                          const hasImage = isVanilla ? true : variant.hasScreenshot;
+
+                          return (
+                            <div key={idx} className="costume-card existing-costume">
+                              <div className="costume-preview">
+                                {hasImage && (
+                                  <img
+                                    src={imageUrl}
+                                    alt={variant.name}
+                                    onError={(e) => e.target.style.display = 'none'}
+                                  />
+                                )}
+                                <button
+                                  className="btn-remove"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveVariant(selectedStage.code, variant.name);
+                                  }}
+                                  disabled={removing}
+                                  title="Remove variant"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className="costume-info">
+                                <h4>{variant.name}</h4>
+                                <p className="costume-file">{variant.filename}</p>
+                              </div>
                             </div>
-                            <div className="costume-info">
-                              <h4>{variant.name}</h4>
-                              <p className="costume-file">{variant.filename}</p>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {mexVariants.length === 0 && (
                           <div className="no-costumes">
                             <p>No variants in MEX yet</p>
@@ -1400,30 +1409,39 @@ const MexPanel = () => {
                     <div className="costumes-section">
                       <h3>Available to Import</h3>
                       <div className="costume-list">
-                        {getVariantsForStage(selectedStage.code).map((variant, idx) => (
-                          <div key={idx} className="costume-card">
-                            <div className="costume-preview">
-                              {variant.hasScreenshot && (
-                                <img
-                                  src={variant.screenshotUrl}
-                                  alt={variant.name}
-                                  onError={(e) => e.target.style.display = 'none'}
-                                />
-                              )}
+                        {getVariantsForStage(selectedStage.code).map((variant, idx) => {
+                          // Use vanilla image for vanilla.dat and vanilla.usd stages
+                          const isVanilla = variant.filename === 'vanilla.dat' || variant.filename === 'vanilla.usd';
+                          const imageUrl = isVanilla
+                            ? selectedStage.vanillaImage
+                            : variant.screenshotUrl;
+                          const hasImage = isVanilla ? true : variant.hasScreenshot;
+
+                          return (
+                            <div key={idx} className="costume-card">
+                              <div className="costume-preview">
+                                {hasImage && (
+                                  <img
+                                    src={imageUrl}
+                                    alt={variant.name}
+                                    onError={(e) => e.target.style.display = 'none'}
+                                  />
+                                )}
+                              </div>
+                              <div className="costume-info">
+                                <h4>{variant.name}</h4>
+                                <p className="costume-code">{selectedStage.name}</p>
+                                <button
+                                  className="btn-add"
+                                  onClick={() => handleImportVariant(variant)}
+                                  disabled={importing}
+                                >
+                                  {importingCostume === variant.zipPath ? 'Importing...' : importing ? 'Wait...' : 'Add to MEX'}
+                                </button>
+                              </div>
                             </div>
-                            <div className="costume-info">
-                              <h4>{variant.name}</h4>
-                              <p className="costume-code">{selectedStage.name}</p>
-                              <button
-                                className="btn-add"
-                                onClick={() => handleImportVariant(variant)}
-                                disabled={importing}
-                              >
-                                {importingCostume === variant.zipPath ? 'Importing...' : importing ? 'Wait...' : 'Add to MEX'}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {getVariantsForStage(selectedStage.code).length === 0 && (
                           <div className="no-costumes">
                             <p>No variants available in storage for {selectedStage.name}</p>
