@@ -1075,47 +1075,49 @@ const MexPanel = () => {
         )}
       </div>
 
-      <div className="mex-actions">
-        <button
-          className="btn-primary"
-          onClick={() => setShowIsoBuilder(true)}
-        >
-          Export ISO
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={() => setShowProjectModal(true)}
-        >
-          Switch Project
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={fetchFighters}
-        >
-          Refresh
-        </button>
-      </div>
+      <div className="mex-header-actions">
+        <div className="action-buttons">
+          <button
+            className="action-btn"
+            onClick={() => setShowIsoBuilder(true)}
+          >
+            Export ISO
+          </button>
+          <button
+            className="action-btn"
+            onClick={() => setShowProjectModal(true)}
+          >
+            Switch Project
+          </button>
+          <button
+            className="action-btn"
+            onClick={fetchFighters}
+          >
+            Refresh
+          </button>
+        </div>
 
-      {/* Mode Switcher */}
-      <div className="mode-switcher">
-        <button
-          className={`mode-btn ${mode === 'characters' ? 'active' : ''}`}
-          onClick={() => {
-            setMode('characters');
-            setSelectedStage(null);
-          }}
-        >
-          Characters
-        </button>
-        <button
-          className={`mode-btn ${mode === 'stages' ? 'active' : ''}`}
-          onClick={() => {
-            setMode('stages');
-            setSelectedFighter(null);
-          }}
-        >
-          Stages
-        </button>
+        {/* Mode Switcher */}
+        <div className="mode-switcher">
+          <button
+            className={`mode-btn ${mode === 'characters' ? 'active' : ''}`}
+            onClick={() => {
+              setMode('characters');
+              setSelectedStage(null);
+            }}
+          >
+            Characters
+          </button>
+          <button
+            className={`mode-btn ${mode === 'stages' ? 'active' : ''}`}
+            onClick={() => {
+              setMode('stages');
+              setSelectedFighter(null);
+            }}
+          >
+            Stages
+          </button>
+        </div>
       </div>
 
       {mode === 'characters' ? (

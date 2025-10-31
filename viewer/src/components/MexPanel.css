@@ -62,12 +62,36 @@
   50% { opacity: 0.5; }
 }
 
-.mex-actions {
+.mex-header-actions {
   padding: 0.75rem 1rem;
   display: flex;
-  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: center;
   background: #1e1e1e;
   border-bottom: 1px solid #333;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #444;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #666;
 }
 
 .btn-primary,
@@ -310,50 +334,30 @@
 .btn-batch-import,
 .btn-select-all,
 .btn-clear-selection {
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #444;
   padding: 0.4rem 0.75rem;
-  border: none;
-  border-radius: 4px;
   font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
+  transition: all 0.3s ease;
   white-space: nowrap;
 }
 
-.btn-batch-import {
-  background: #4caf50;
-  color: white;
-}
-
-.btn-batch-import:hover:not(:disabled) {
-  background: #43a047;
-}
-
-.btn-batch-import:disabled {
-  background: #666;
-  cursor: not-allowed;
-}
-
-.btn-select-all {
-  background: #1976d2;
-  color: white;
-}
-
-.btn-select-all:hover {
-  background: #1565c0;
-}
-
-.btn-clear-selection {
-  background: #666;
-  color: white;
-}
-
+.btn-batch-import:hover:not(:disabled),
+.btn-select-all:hover:not(:disabled),
 .btn-clear-selection:hover:not(:disabled) {
-  background: #777;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #666;
 }
 
+.btn-batch-import:disabled,
+.btn-select-all:disabled,
 .btn-clear-selection:disabled {
-  background: #555;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -588,10 +592,6 @@
 .mode-switcher {
   display: flex;
   gap: 8px;
-  justify-content: center;
-  padding: 0.75rem 1rem;
-  background: #1e1e1e;
-  border-bottom: 1px solid #333;
 }
 
 .mode-btn {

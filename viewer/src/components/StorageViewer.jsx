@@ -13,7 +13,7 @@ const DAS_STAGES = [
   { code: 'GrNLa', name: 'Final Destination', folder: 'final_destination', vanillaImage: '/vanilla/stages/final destination.png' }
 ]
 
-export default function StorageViewer({ metadata }) {
+export default function StorageViewer({ metadata, onRefresh }) {
   const [mode, setMode] = useState('characters') // 'characters' or 'stages'
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [selectedStage, setSelectedStage] = useState(null)
@@ -428,7 +428,7 @@ export default function StorageViewer({ metadata }) {
 
       setShowEditModal(false)
       setEditingItem(null)
-      window.location.reload()
+      onRefresh()
     } catch (err) {
       alert(`Save error: ${err.message}`)
     } finally {
@@ -473,7 +473,7 @@ export default function StorageViewer({ metadata }) {
       if (data.success) {
         setShowEditModal(false)
         setEditingItem(null)
-        window.location.reload()
+        onRefresh()
       } else {
         alert(`Delete failed: ${data.error}`)
       }
