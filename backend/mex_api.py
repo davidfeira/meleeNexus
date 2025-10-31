@@ -509,6 +509,78 @@ def remove_costume():
         }), 500
 
 
+@app.route('/api/mex/reorder', methods=['POST'])
+def reorder_costume():
+    """
+    Reorder costume in MEX project (swap positions)
+
+    Body:
+    {
+        "fighter": "Fox",
+        "fromIndex": 2,
+        "toIndex": 0
+    }
+
+    Note: For Ice Climbers (Popo), paired Nana costumes are automatically reordered
+    """
+    try:
+        data = request.json
+        fighter_name = data.get('fighter')
+        from_index = data.get('fromIndex')
+        to_index = data.get('toIndex')
+
+        logger.info(f"=== REORDER REQUEST ===")
+        logger.info(f"Fighter: {fighter_name}")
+        logger.info(f"From Index: {from_index}")
+        logger.info(f"To Index: {to_index}")
+
+        if fighter_name is None or from_index is None or to_index is None:
+            logger.error("Missing fighter, fromIndex, or toIndex parameter")
+            return jsonify({
+                'success': False,
+                'error': 'Missing fighter, fromIndex, or toIndex parameter'
+            }), 400
+
+        # Validate indices
+        if not isinstance(from_index, int) or from_index < 0:
+            logger.error(f"Invalid from_index: {from_index}")
+            return jsonify({
+                'success': False,
+                'error': 'fromIndex must be a non-negative integer'
+            }), 400
+
+        if not isinstance(to_index, int) or to_index < 0:
+            logger.error(f"Invalid to_index: {to_index}")
+            return jsonify({
+                'success': False,
+                'error': 'toIndex must be a non-negative integer'
+            }), 400
+
+        logger.info(f"Calling MexCLI to reorder costume...")
+        mex = get_mex_manager()
+        result = mex.reorder_costume(fighter_name, from_index, to_index)
+
+        logger.info(f"Reorder result: {json.dumps(result, indent=2)}")
+        logger.info(f"=== REORDER COMPLETE ===")
+
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+    except MexManagerError as e:
+        logger.error(f"MexManagerError: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {str(e)}'
+        }), 500
+
+
 @app.route('/api/mex/export/start', methods=['POST'])
 def start_export():
     """

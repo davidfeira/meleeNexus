@@ -277,6 +277,35 @@ class MexManager:
             str(costume_index)
         )
 
+    def reorder_costume(self, fighter_name: str, from_index: int, to_index: int) -> Dict:
+        """
+        Reorder costumes by swapping positions.
+
+        Args:
+            fighter_name: Name of fighter (e.g., "Fox")
+            from_index: Source costume index (0-based)
+            to_index: Destination costume index (0-based)
+
+        Returns:
+            Dict with reorder results:
+                - success: bool
+                - fighter: str
+                - fighterInternalId: int
+                - reordered: dict (fromIndex, toIndex)
+                - costumes: list of updated costumes
+
+        Note:
+            - For Ice Climbers (Popo), paired Nana costumes are automatically reordered
+            - For Kirby, Kirby hat costumes across all fighters are automatically reordered
+        """
+        return self._run_command(
+            "reorder-costume",
+            str(self.project_path),
+            fighter_name,
+            str(from_index),
+            str(to_index)
+        )
+
     def save_project(self) -> Dict:
         """
         Save project changes.

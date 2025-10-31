@@ -34,6 +34,9 @@ const MexPanel = () => {
   const [selectedCostumes, setSelectedCostumes] = useState(new Set());
   const [batchImporting, setBatchImporting] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [reordering, setReordering] = useState(false);
 
   // DAS state
   const [dasInstalled, setDasInstalled] = useState(false);
@@ -98,6 +101,8 @@ const MexPanel = () => {
   useEffect(() => {
     if (selectedFighter) {
       fetchMexCostumes(selectedFighter.name);
+      // Clear selection when switching fighters
+      setSelectedCostumes(new Set());
     }
   }, [selectedFighter]);
 
@@ -407,6 +412,241 @@ const MexPanel = () => {
   const getCostumesForFighter = (fighterName) => {
     // Filter out Nana costumes (they're auto-imported with Popo)
     return storageCostumes.filter(c => c.character === fighterName && !c.isNana);
+  };
+
+  const toggleCostumeSelection = (zipPath) => {
+    setSelectedCostumes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(zipPath)) {
+        newSet.delete(zipPath);
+      } else {
+        newSet.add(zipPath);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllCostumes = () => {
+    if (!selectedFighter) return;
+    const allCostumes = getCostumesForFighter(selectedFighter.name);
+    setSelectedCostumes(new Set(allCostumes.map(c => c.zipPath)));
+  };
+
+  const clearSelection = () => {
+    setSelectedCostumes(new Set());
+  };
+
+  const handleBatchImport = async () => {
+    if (selectedCostumes.size === 0 || batchImporting) return;
+
+    setBatchImporting(true);
+    const costumesToImport = Array.from(selectedCostumes);
+    const total = costumesToImport.length;
+    setBatchProgress({ current: 0, total });
+
+    let successCount = 0;
+    let failCount = 0;
+    const importedNanas = new Set(); // Track Nanas already imported as pairs
+
+    for (let i = 0; i < costumesToImport.length; i++) {
+      const zipPath = costumesToImport[i];
+      const costume = storageCostumes.find(c => c.zipPath === zipPath);
+
+      if (!costume) {
+        failCount++;
+        continue;
+      }
+
+      // Skip if this is a Nana that was already imported as part of a Popo pair
+      if (importedNanas.has(zipPath)) {
+        continue;
+      }
+
+      setBatchProgress({ current: i + 1, total });
+
+      try {
+        // Ice Climbers: Auto-import paired Nana when Popo is selected
+        if (costume.isPopo && costume.pairedNanaId) {
+          console.log('Ice Climbers Popo detected in batch - will auto-import paired Nana');
+
+          // Find paired Nana costume in storage
+          const nanaCostume = storageCostumes.find(c => c.folder === costume.pairedNanaId);
+
+          if (!nanaCostume) {
+            console.error('Paired Nana costume not found:', costume.pairedNanaId);
+            failCount++;
+            continue;
+          }
+
+          // Import Popo first
+          const popoResponse = await fetch(`${API_URL}/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fighter: 'Ice Climbers',
+              costumePath: costume.zipPath
+            })
+          });
+
+          const popoData = await popoResponse.json();
+
+          if (!popoData.success) {
+            console.error(`Popo import failed: ${popoData.error}`);
+            failCount++;
+            continue;
+          }
+
+          // Import Nana second
+          const nanaFighter = fighters.find(f => f.internalId === 11);
+
+          if (!nanaFighter) {
+            console.error('Nana fighter (ID 11) not found in project');
+            failCount++;
+            continue;
+          }
+
+          const nanaResponse = await fetch(`${API_URL}/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fighter: nanaFighter.name,
+              costumePath: nanaCostume.zipPath
+            })
+          });
+
+          const nanaData = await nanaResponse.json();
+
+          if (!nanaData.success) {
+            console.error(`Nana import failed: ${nanaData.error}`);
+            failCount++;
+            continue;
+          }
+
+          console.log(`✓ Successfully imported Ice Climbers pair (Popo + Nana)`);
+          successCount++;
+
+          // Mark this Nana as imported so we don't try to import her again
+          importedNanas.add(nanaCostume.zipPath);
+
+        } else {
+          // Normal single costume import
+          const requestBody = {
+            fighter: costume.character,
+            costumePath: costume.zipPath
+          };
+
+          const response = await fetch(`${API_URL}/import`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            successCount++;
+          } else {
+            console.error(`Import failed for ${costume.name}:`, data.error);
+            failCount++;
+          }
+        }
+      } catch (err) {
+        console.error(`Import error for ${costume.name}:`, err);
+        failCount++;
+      }
+    }
+
+    // Refresh data once at the end
+    setRefreshing(true);
+    await Promise.all([
+      fetchFighters(),
+      selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+    ]);
+    setRefreshing(false);
+
+    // Clear selections
+    setSelectedCostumes(new Set());
+    setBatchImporting(false);
+    setBatchProgress({ current: 0, total: 0 });
+
+    // Show summary
+    if (failCount > 0) {
+      alert(`Batch import completed:\n${successCount} succeeded, ${failCount} failed`);
+    } else {
+      console.log(`✓ Successfully imported ${successCount} costume(s)`);
+    }
+  };
+
+  // Drag and Drop Handlers for Reordering
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (e, index) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = (e) => {
+    // Only clear if we're leaving the card entirely (not just entering a child element)
+    if (e.currentTarget === e.target) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = async (e, toIndex) => {
+    e.preventDefault();
+
+    if (draggedIndex === null || draggedIndex === toIndex || reordering) {
+      return;
+    }
+
+    setReordering(true);
+
+    try {
+      const response = await fetch(`${API_URL}/reorder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fighter: selectedFighter.name,
+          fromIndex: draggedIndex,
+          toIndex: toIndex
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log(`✓ Successfully reordered costume from ${draggedIndex} to ${toIndex}`);
+
+        // Refresh to show updated order
+        await fetchMexCostumes(selectedFighter.name);
+      } else {
+        alert(`Reorder failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('Reorder error:', err);
+      alert(`Reorder error: ${err.message}`);
+    } finally {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      setReordering(false);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   // DAS Functions
@@ -888,45 +1128,59 @@ const MexPanel = () => {
               <div className="costumes-section">
                 <h3>Already in MEX ({mexCostumes.length})</h3>
                 <div className="costume-list existing">
-                  {mexCostumes.map((costume, idx) => (
-                    <div key={idx} className="costume-card existing-costume">
-                      {costume.cspUrl && (
-                        <div className="costume-preview">
-                          <img
-                            src={`${API_URL}${costume.cspUrl}`}
-                            alt={costume.name}
-                            onError={(e) => e.target.style.display = 'none'}
-                          />
-                          <button
-                            className="btn-remove"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveCostume(selectedFighter.name, idx, costume.name);
-                            }}
-                            disabled={removing}
-                            title="Remove costume"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
-                      <div className="costume-info">
-                        <h4>{costume.name}</h4>
-                        <p className="costume-file">{costume.fileName}</p>
-                        {costume.iconUrl && (
-                          <div className="costume-assets">
-                            <div className="stock-icon">
-                              <img
-                                src={`${API_URL}${costume.iconUrl}`}
-                                alt="Stock"
-                                onError={(e) => e.target.style.display = 'none'}
-                              />
-                            </div>
+                  {mexCostumes.map((costume, idx) => {
+                    const isDragging = draggedIndex === idx;
+                    const isDragOver = dragOverIndex === idx;
+                    return (
+                      <div
+                        key={idx}
+                        className={`costume-card existing-costume ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+                        draggable={!removing && !reordering}
+                        onDragStart={(e) => handleDragStart(e, idx)}
+                        onDragOver={handleDragOver}
+                        onDragEnter={(e) => handleDragEnter(e, idx)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, idx)}
+                        onDragEnd={handleDragEnd}
+                      >
+                        {costume.cspUrl && (
+                          <div className="costume-preview">
+                            <img
+                              src={`${API_URL}${costume.cspUrl}`}
+                              alt={costume.name}
+                              onError={(e) => e.target.style.display = 'none'}
+                            />
+                            <button
+                              className="btn-remove"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveCostume(selectedFighter.name, idx, costume.name);
+                              }}
+                              disabled={removing}
+                              title="Remove costume"
+                            >
+                              ×
+                            </button>
                           </div>
                         )}
+                        <div className="costume-info">
+                          <h4>{costume.name}</h4>
+                          <p className="costume-file">{costume.fileName}</p>
+                          {costume.iconUrl && (
+                            <div className="costume-assets">
+                              <div className="stock-icon">
+                                <img
+                                  src={`${API_URL}${costume.iconUrl}`}
+                                  alt="Stock"
+                                  onError={(e) => e.target.style.display = 'none'}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {mexCostumes.length === 0 && (
                     <div className="no-costumes">
                       <p>No costumes in MEX yet</p>
@@ -936,48 +1190,91 @@ const MexPanel = () => {
               </div>
 
               <div className="costumes-section">
-                <h3>Available to Import</h3>
-                <div className="costume-list">
-                  {getCostumesForFighter(selectedFighter.name).map((costume, idx) => (
-                    <div key={idx} className="costume-card">
-                      <div className="costume-preview">
-                        {costume.cspUrl && (
-                          <img
-                            src={costume.cspUrl}
-                            alt={costume.name}
-                            onError={(e) => e.target.style.display = 'none'}
-                          />
-                        )}
-                      </div>
-                      <div className="costume-info">
-                        <h4>{costume.name}</h4>
-                        <p className="costume-code">{costume.costumeCode}</p>
-                        <div className="costume-assets">
-                          {costume.stockUrl && (
-                            <div className="stock-icon">
-                              <img
-                                src={costume.stockUrl}
-                                alt="Stock"
-                                onError={(e) => e.target.style.display = 'none'}
-                              />
-                            </div>
-                          )}
-                          {costume.slippiSafe && (
-                            <div className="slippi-badge" title="Slippi Safe">
-                              ✓
-                            </div>
-                          )}
-                        </div>
+                <div className="costumes-section-header">
+                  <h3>
+                    Available to Import
+                    {selectedCostumes.size > 0 && ` (${selectedCostumes.size} selected)`}
+                  </h3>
+                  {getCostumesForFighter(selectedFighter.name).length > 0 && (
+                    <div className="batch-controls">
+                      {selectedCostumes.size > 0 ? (
+                        <>
+                          <button
+                            className="btn-batch-import"
+                            onClick={handleBatchImport}
+                            disabled={batchImporting}
+                          >
+                            {batchImporting
+                              ? `Importing ${batchProgress.current}/${batchProgress.total}...`
+                              : `Import Selected (${selectedCostumes.size})`}
+                          </button>
+                          <button
+                            className="btn-clear-selection"
+                            onClick={clearSelection}
+                            disabled={batchImporting}
+                          >
+                            Clear
+                          </button>
+                        </>
+                      ) : (
                         <button
-                          className="btn-add"
-                          onClick={() => handleImportCostume(costume)}
-                          disabled={importing}
+                          className="btn-select-all"
+                          onClick={selectAllCostumes}
                         >
-                          {importingCostume === costume.zipPath ? 'Importing...' : importing ? 'Wait...' : 'Add to MEX'}
+                          Select All
                         </button>
-                      </div>
+                      )}
                     </div>
-                  ))}
+                  )}
+                </div>
+                <div className="costume-list">
+                  {getCostumesForFighter(selectedFighter.name).map((costume, idx) => {
+                    const isSelected = selectedCostumes.has(costume.zipPath);
+                    return (
+                      <div
+                        key={idx}
+                        className={`costume-card ${isSelected ? 'selected' : ''}`}
+                        onClick={() => !batchImporting && toggleCostumeSelection(costume.zipPath)}
+                      >
+                        <div className="costume-preview">
+                          {costume.cspUrl && (
+                            <img
+                              src={costume.cspUrl}
+                              alt={costume.name}
+                              onError={(e) => e.target.style.display = 'none'}
+                            />
+                          )}
+                          <input
+                            type="checkbox"
+                            className="costume-checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            disabled={batchImporting}
+                          />
+                        </div>
+                        <div className="costume-info">
+                          <h4>{costume.name}</h4>
+                          <p className="costume-code">{costume.costumeCode}</p>
+                          <div className="costume-assets">
+                            {costume.stockUrl && (
+                              <div className="stock-icon">
+                                <img
+                                  src={costume.stockUrl}
+                                  alt="Stock"
+                                  onError={(e) => e.target.style.display = 'none'}
+                                />
+                              </div>
+                            )}
+                            {costume.slippiSafe && (
+                              <div className="slippi-badge" title="Slippi Safe">
+                                ✓
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {getCostumesForFighter(selectedFighter.name).length === 0 && (
                     <div className="no-costumes">
                       <p>No costumes available in storage for {selectedFighter.name}</p>

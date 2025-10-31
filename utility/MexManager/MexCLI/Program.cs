@@ -32,6 +32,8 @@ namespace MexCLI
                         return Commands.ImportCostumeCommand.Execute(args);
                     case "remove-costume":
                         return Commands.RemoveCostumeCommand.Execute(args);
+                    case "reorder-costume":
+                        return Commands.ReorderCostumeCommand.Execute(args);
                     case "save":
                         return Commands.SaveCommand.Execute(args);
                     case "export":
@@ -76,6 +78,7 @@ namespace MexCLI
             Console.WriteLine("  get-costumes <project> <fighter>           - Get costumes for fighter");
             Console.WriteLine("  import-costume <project> <fighter> <zip>   - Import costume ZIP");
             Console.WriteLine("  remove-costume <project> <fighter> <index> - Remove costume by index");
+            Console.WriteLine("  reorder-costume <project> <fighter> <from> <to> - Reorder costume");
             Console.WriteLine("  save <project.mexproj>                     - Save project changes");
             Console.WriteLine("  export <project.mexproj> <output.iso>      - Export ISO");
             Console.WriteLine("  info <project.mexproj>                     - Get project information");
