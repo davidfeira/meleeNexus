@@ -373,6 +373,11 @@
   gap: 0.5rem;
 }
 
+.costume-list.processing {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .costume-card {
   background: #252525;
   border-radius: 6px;

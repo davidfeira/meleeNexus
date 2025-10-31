@@ -175,10 +175,6 @@ def detect_character_from_zip(zip_path: str) -> List[Dict]:
         results = []
         import tempfile
 
-        # Track which images have been used to prevent double-matching
-        used_csp_files = set()
-        used_stock_files = set()
-
         # Process each DAT file
         for dat_filename in dat_files:
             # Extract DAT to temp location for parsing
@@ -213,104 +209,67 @@ def detect_character_from_zip(zip_path: str) -> List[Dict]:
                 dat_folder = os.path.dirname(dat_filename)
                 dat_basename = os.path.splitext(os.path.basename(dat_filename))[0].lower()
 
-                # Count DATs in this folder (used by both CSP and stock matching)
-                dats_in_folder = sum(1 for d in dat_files if os.path.dirname(d) == dat_folder)
-
-                # FOUR-TIER MATCHING for CSP
+                # THREE-TIER MATCHING for CSP
                 csp_file = None
-
-                # Tier 0: Exact/similar filename match (best match)
-                # Match DAT basename with CSP basename (removing csp_ prefix)
-                for csp_path, csp_info in csps_by_path.items():
-                    if csp_path in used_csp_files:
-                        continue
-                    # Remove common CSP prefixes from the basename
-                    csp_basename_clean = csp_info['basename'].replace('csp_', '').replace('portrait_', '').replace('icon_', '')
-                    # Check if basenames match (both already lowercased)
-                    if csp_basename_clean == dat_basename:
-                        csp_file = csp_info['filename']
-                        break
 
                 # Tier 1: Costume code match
                 if costume_code:
                     costume_code_upper = costume_code.upper()
                     if costume_code_upper in csps_by_costume:
                         candidates = csps_by_costume[costume_code_upper]
-                        # Filter out already-used CSPs
-                        available_candidates = [c for c in candidates if c['filename'] not in used_csp_files]
-                        if available_candidates:
-                            # If multiple CSPs match, prefer same folder
-                            same_folder = [c for c in available_candidates if c['folder'] == dat_folder]
-                            if same_folder:
-                                csp_file = same_folder[0]['filename']
-                            else:
-                                # Use first available match
-                                csp_file = available_candidates[0]['filename']
+                        # If multiple CSPs match, prefer same folder
+                        same_folder = [c for c in candidates if c['folder'] == dat_folder]
+                        if same_folder:
+                            csp_file = same_folder[0]['filename']
+                        else:
+                            # Use first match
+                            csp_file = candidates[0]['filename']
 
                 # Tier 2: Same-folder match
                 if not csp_file:
+                    # Count DATs in this folder
+                    dats_in_folder = sum(1 for d in dat_files if os.path.dirname(d) == dat_folder)
 
                     if dats_in_folder == 1:
                         # Only 1 DAT in this folder - match any CSP from same folder
                         for csp_path, csp_info in csps_by_path.items():
-                            if csp_info['folder'] == dat_folder and csp_path not in used_csp_files:
+                            if csp_info['folder'] == dat_folder:
                                 csp_file = csp_info['filename']
                                 break
 
                 # Tier 3: Global fallback (single DAT in entire ZIP)
                 if not csp_file and len(dat_files) == 1 and csps_by_path:
                     # Take first available CSP
-                    for csp_path, csp_info in csps_by_path.items():
-                        if csp_path not in used_csp_files:
-                            csp_file = csp_info['filename']
-                            break
+                    csp_file = next(iter(csps_by_path.values()))['filename']
 
-                # FOUR-TIER MATCHING for Stock
+                # THREE-TIER MATCHING for Stock
                 stock_file = None
-
-                # Tier 0: Exact/similar filename match (best match)
-                # Match DAT basename with stock basename (removing stock_ prefix)
-                for stock_path, stock_info in stocks_by_path.items():
-                    if stock_path in used_stock_files:
-                        continue
-                    # Remove common stock prefixes from the basename
-                    stock_basename_clean = stock_info['basename'].replace('stock_', '').replace('stc_', '')
-                    # Check if basenames match (both already lowercased)
-                    if stock_basename_clean == dat_basename:
-                        stock_file = stock_info['filename']
-                        break
 
                 # Tier 1: Costume code match
                 if costume_code:
                     costume_code_upper = costume_code.upper()
                     if costume_code_upper in stocks_by_costume:
                         candidates = stocks_by_costume[costume_code_upper]
-                        # Filter out already-used stocks
-                        available_candidates = [c for c in candidates if c['filename'] not in used_stock_files]
-                        if available_candidates:
-                            # If multiple stocks match, prefer same folder
-                            same_folder = [c for c in available_candidates if c['folder'] == dat_folder]
-                            if same_folder:
-                                stock_file = same_folder[0]['filename']
-                            else:
-                                # Use first available match
-                                stock_file = available_candidates[0]['filename']
+                        # If multiple stocks match, prefer same folder
+                        same_folder = [c for c in candidates if c['folder'] == dat_folder]
+                        if same_folder:
+                            stock_file = same_folder[0]['filename']
+                        else:
+                            # Use first match
+                            stock_file = candidates[0]['filename']
 
                 # Tier 2: Same-folder match
                 if not stock_file and dats_in_folder == 1:
                     # Only 1 DAT in this folder - match any stock from same folder
                     for stock_path, stock_info in stocks_by_path.items():
-                        if stock_info['folder'] == dat_folder and stock_path not in used_stock_files:
+                        if stock_info['folder'] == dat_folder:
                             stock_file = stock_info['filename']
                             break
 
                 # Tier 3: Global fallback (single DAT in entire ZIP)
                 if not stock_file and len(dat_files) == 1 and stocks_by_path:
                     # Take first available stock
-                    for stock_path, stock_info in stocks_by_path.items():
-                        if stock_path not in used_stock_files:
-                            stock_file = stock_info['filename']
-                            break
+                    stock_file = next(iter(stocks_by_path.values()))['filename']
 
                 # Normalize character name
                 if character in ['Ice Climbers (Nana)', 'Ice Climbers (Popo)']:
@@ -326,12 +285,6 @@ def detect_character_from_zip(zip_path: str) -> List[Dict]:
                     'symbol': symbol,
                     'folder': dat_folder
                 })
-
-                # Mark matched files as used to prevent double-matching
-                if csp_file:
-                    used_csp_files.add(csp_file)
-                if stock_file:
-                    used_stock_files.add(stock_file)
 
             finally:
                 # Clean up temp file

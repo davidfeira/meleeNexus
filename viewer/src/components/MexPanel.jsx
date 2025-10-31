@@ -37,6 +37,7 @@ const MexPanel = () => {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [reordering, setReordering] = useState(false);
+  const [loadingFighter, setLoadingFighter] = useState(false);
 
   // DAS state
   const [dasInstalled, setDasInstalled] = useState(false);
@@ -100,7 +101,7 @@ const MexPanel = () => {
 
   useEffect(() => {
     if (selectedFighter) {
-      fetchMexCostumes(selectedFighter.name);
+      fetchMexCostumes(selectedFighter.name, true);
       // Clear selection when switching fighters
       setSelectedCostumes(new Set());
     }
@@ -160,7 +161,10 @@ const MexPanel = () => {
     }
   };
 
-  const fetchMexCostumes = async (fighterName) => {
+  const fetchMexCostumes = async (fighterName, showLoading = false) => {
+    if (showLoading) {
+      setLoadingFighter(true);
+    }
     try {
       const response = await fetch(`${API_URL}/fighters/${encodeURIComponent(fighterName)}/costumes`);
       const data = await response.json();
@@ -170,6 +174,10 @@ const MexPanel = () => {
     } catch (err) {
       console.error('Failed to fetch MEX costumes:', err);
       setMexCostumes([]);
+    } finally {
+      if (showLoading) {
+        setLoadingFighter(false);
+      }
     }
   };
 
@@ -609,6 +617,19 @@ const MexPanel = () => {
       return;
     }
 
+    const fromIndex = draggedIndex;
+
+    // Optimistically update UI immediately
+    const newCostumes = [...mexCostumes];
+    const [movedItem] = newCostumes.splice(fromIndex, 1);
+    newCostumes.splice(toIndex, 0, movedItem);
+    setMexCostumes(newCostumes);
+
+    // Clear drag state
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+
+    // Show loading state
     setReordering(true);
 
     try {
@@ -619,7 +640,7 @@ const MexPanel = () => {
         },
         body: JSON.stringify({
           fighter: selectedFighter.name,
-          fromIndex: draggedIndex,
+          fromIndex: fromIndex,
           toIndex: toIndex
         })
       });
@@ -627,19 +648,20 @@ const MexPanel = () => {
       const data = await response.json();
 
       if (data.success) {
-        console.log(`✓ Successfully reordered costume from ${draggedIndex} to ${toIndex}`);
-
-        // Refresh to show updated order
+        console.log(`✓ Successfully reordered costume from ${fromIndex} to ${toIndex}`);
+        // Refresh to confirm server state
         await fetchMexCostumes(selectedFighter.name);
       } else {
+        // Revert on error
         alert(`Reorder failed: ${data.error}`);
+        await fetchMexCostumes(selectedFighter.name);
       }
     } catch (err) {
       console.error('Reorder error:', err);
       alert(`Reorder error: ${err.message}`);
+      // Revert on error
+      await fetchMexCostumes(selectedFighter.name);
     } finally {
-      setDraggedIndex(null);
-      setDragOverIndex(null);
       setReordering(false);
     }
   };
@@ -1122,12 +1144,12 @@ const MexPanel = () => {
           </div>
         </div>
 
-        <div className={`costumes-panel ${refreshing ? 'refreshing' : ''}`}>
+        <div className={`costumes-panel ${refreshing || loadingFighter ? 'refreshing' : ''}`}>
           {selectedFighter ? (
             <>
               <div className="costumes-section">
                 <h3>Already in MEX ({mexCostumes.length})</h3>
-                <div className="costume-list existing">
+                <div className={`costume-list existing ${reordering ? 'processing' : ''} ${loadingFighter ? 'processing' : ''}`}>
                   {mexCostumes.map((costume, idx) => {
                     const isDragging = draggedIndex === idx;
                     const isDragOver = dragOverIndex === idx;
@@ -1202,7 +1224,7 @@ const MexPanel = () => {
                           <button
                             className="btn-batch-import"
                             onClick={handleBatchImport}
-                            disabled={batchImporting}
+                            disabled={batchImporting || loadingFighter}
                           >
                             {batchImporting
                               ? `Importing ${batchProgress.current}/${batchProgress.total}...`
@@ -1211,7 +1233,7 @@ const MexPanel = () => {
                           <button
                             className="btn-clear-selection"
                             onClick={clearSelection}
-                            disabled={batchImporting}
+                            disabled={batchImporting || loadingFighter}
                           >
                             Clear
                           </button>
@@ -1220,6 +1242,7 @@ const MexPanel = () => {
                         <button
                           className="btn-select-all"
                           onClick={selectAllCostumes}
+                          disabled={loadingFighter}
                         >
                           Select All
                         </button>
@@ -1227,14 +1250,14 @@ const MexPanel = () => {
                     </div>
                   )}
                 </div>
-                <div className="costume-list">
+                <div className={`costume-list ${loadingFighter ? 'processing' : ''}`}>
                   {getCostumesForFighter(selectedFighter.name).map((costume, idx) => {
                     const isSelected = selectedCostumes.has(costume.zipPath);
                     return (
                       <div
                         key={idx}
                         className={`costume-card ${isSelected ? 'selected' : ''}`}
-                        onClick={() => !batchImporting && toggleCostumeSelection(costume.zipPath)}
+                        onClick={() => !batchImporting && !loadingFighter && toggleCostumeSelection(costume.zipPath)}
                       >
                         <div className="costume-preview">
                           {costume.cspUrl && (
@@ -1249,7 +1272,7 @@ const MexPanel = () => {
                             className="costume-checkbox"
                             checked={isSelected}
                             onChange={() => {}}
-                            disabled={batchImporting}
+                            disabled={batchImporting || loadingFighter}
                           />
                         </div>
                         <div className="costume-info">
