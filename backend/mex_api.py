@@ -407,15 +407,27 @@ def serve_mex_asset(asset_path):
 def serve_storage(file_path):
     """Serve files from storage folder (costumes, stages, screenshots, etc.)"""
     try:
+        logger.info(f"========== STORAGE REQUEST ==========")
+        logger.info(f"Requested file_path: {file_path}")
+        logger.info(f"STORAGE_PATH: {STORAGE_PATH}")
+
         # Handle Windows path separators
         file_path = file_path.replace('\\', '/')
         full_path = STORAGE_PATH / file_path
 
-        logger.info(f"Serving storage file: {file_path} -> {full_path}")
+        logger.info(f"Full path: {full_path}")
+        logger.info(f"File exists: {full_path.exists()}")
 
         if not full_path.exists():
-            logger.warning(f"Storage file not found: {full_path}")
-            # Try to return a placeholder or empty response
+            # Log what's in the parent directory
+            parent_dir = full_path.parent
+            logger.warning(f"Storage file NOT FOUND: {full_path}")
+            logger.warning(f"Parent directory: {parent_dir}")
+            if parent_dir.exists():
+                files = list(parent_dir.glob('*'))[:10]
+                logger.warning(f"Files in parent dir: {[f.name for f in files]}")
+            else:
+                logger.warning(f"Parent directory does not exist!")
             return jsonify({'success': False, 'error': f'File not found: {file_path}'}), 404
 
         # Determine mimetype based on extension
@@ -426,8 +438,10 @@ def serve_storage(file_path):
         else:
             mimetype = 'application/octet-stream'
 
+        logger.info(f"✓ Serving storage file: {full_path}")
         return send_file(full_path, mimetype=mimetype)
     except Exception as e:
+        logger.error(f"EXCEPTION serving storage file {file_path}: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

@@ -916,7 +916,7 @@ export default function StorageViewer({ metadata, onRefresh }) {
                     <div className="skin-image-container">
                       {variant.hasScreenshot ? (
                         <img
-                          src={variant.screenshotUrl}
+                          src={`${API_URL.replace('/api/mex', '')}${variant.screenshotUrl}`}
                           alt={variant.name}
                           className="skin-csp"
                           onError={(e) => {

@@ -1417,7 +1417,7 @@ const MexPanel = () => {
                           const isVanilla = variant.filename === 'vanilla.dat' || variant.filename === 'vanilla.usd';
                           const imageUrl = isVanilla
                             ? selectedStage.vanillaImage
-                            : variant.screenshotUrl;
+                            : (variant.screenshotUrl ? `${BACKEND_URL}${variant.screenshotUrl}` : null);
                           const hasImage = isVanilla ? true : variant.hasScreenshot;
 
                           return (
@@ -1465,7 +1465,7 @@ const MexPanel = () => {
                           const isVanilla = variant.filename === 'vanilla.dat' || variant.filename === 'vanilla.usd';
                           const imageUrl = isVanilla
                             ? selectedStage.vanillaImage
-                            : variant.screenshotUrl;
+                            : (variant.screenshotUrl ? `${BACKEND_URL}${variant.screenshotUrl}` : null);
                           const hasImage = isVanilla ? true : variant.hasScreenshot;
 
                           return (
