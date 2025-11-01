@@ -274,11 +274,12 @@ const MexPanel = () => {
 
         console.log(`✓ Successfully imported Ice Climbers pair (Popo + Nana)`);
 
-        // Refresh fighters list
+        // Refresh fighters list and storage
         setRefreshing(true);
         await Promise.all([
           fetchFighters(),
-          selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+          fetchStorageCostumes(),
+          fetchMexCostumes('Ice Climbers')
         ]);
         setRefreshing(false);
 
@@ -309,7 +310,8 @@ const MexPanel = () => {
           setRefreshing(true);
           await Promise.all([
             fetchFighters(),
-            selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+            fetchStorageCostumes(),
+            fetchMexCostumes(costume.character)
           ]);
           setRefreshing(false);
         } else {
@@ -421,7 +423,8 @@ const MexPanel = () => {
       setRefreshing(true);
       await Promise.all([
         fetchFighters(),
-        selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+        fetchStorageCostumes(),
+        fetchMexCostumes(fighterName)
       ]);
       setRefreshing(false);
 
@@ -795,8 +798,11 @@ const MexPanel = () => {
       if (data.success) {
         console.log(`✓ Successfully imported variant to ${variant.stageName}`);
         setRefreshing(true);
-        await fetchMexVariants(selectedStage.code);
-        await fetchAllMexVariantCounts();
+        await Promise.all([
+          fetchMexVariants(selectedStage.code),
+          fetchStorageVariants(),
+          fetchAllMexVariantCounts()
+        ]);
         setRefreshing(false);
       } else {
         alert(`Import failed: ${data.error}`);
@@ -834,8 +840,11 @@ const MexPanel = () => {
       if (data.success) {
         console.log(`✓ Successfully removed "${variantName}"`);
         setRefreshing(true);
-        await fetchMexVariants(selectedStage.code);
-        await fetchAllMexVariantCounts();
+        await Promise.all([
+          fetchMexVariants(selectedStage.code),
+          fetchStorageVariants(),
+          fetchAllMexVariantCounts()
+        ]);
         setRefreshing(false);
       } else {
         alert(`Remove failed: ${data.error}`);
