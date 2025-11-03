@@ -148,22 +148,23 @@ def detect_stage_from_zip(zip_path: str) -> List[Dict]:
                 # Check for stage patterns
                 for stage_code, stage_info in STAGE_MAPPING.items():
                     if stage_code.upper() in name_upper:
-                        # Validate extension (.dat or .usd)
-                        if file_ext in ['.dat', '.usd']:
-                            # Pokemon Stadium can be .usd or .dat
-                            if stage_code == 'GrPs' and file_ext not in ['.dat', '.usd']:
+                        # Validate extension based on stage
+                        # Pokemon Stadium (GrPs) uses .usd files
+                        # All other stages use .dat files
+                        if stage_code == 'GrPs':
+                            if file_ext != '.usd':
                                 continue
-                            # All other stages must be .dat
-                            elif stage_code != 'GrPs' and file_ext != '.dat':
+                        else:
+                            if file_ext != '.dat':
                                 continue
 
-                            stage_files.append({
-                                'filename': filename,
-                                'stage_code': stage_code,
-                                'stage_info': stage_info,
-                                'extension': file_ext
-                            })
-                            break  # Found stage code, don't check other codes
+                        stage_files.append({
+                            'filename': filename,
+                            'stage_code': stage_code,
+                            'stage_info': stage_info,
+                            'extension': file_ext
+                        })
+                        break  # Found stage code, don't check other codes
 
             # If no stages found, return empty list
             if not stage_files:
@@ -364,13 +365,14 @@ def is_stage_file(filename: str) -> bool:
     name_upper = filename.upper()
     ext = os.path.splitext(filename)[1].lower()
 
-    # Check extension
-    if ext not in ['.dat', '.usd']:
-        return False
-
-    # Check for stage codes
+    # Check for stage codes and validate extension
     for stage_code in STAGE_MAPPING.keys():
         if stage_code.upper() in name_upper:
-            return True
+            # Pokemon Stadium (GrPs) uses .usd files
+            # All other stages use .dat files
+            if stage_code == 'GrPs':
+                return ext == '.usd'
+            else:
+                return ext == '.dat'
 
     return False
