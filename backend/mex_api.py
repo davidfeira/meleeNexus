@@ -2868,6 +2868,20 @@ def add_button_indicator(filename, button):
     cleaned = strip_button_indicator(filename)
     return f"{cleaned}({button.upper()})"
 
+def sanitize_filename(name):
+    """
+    Sanitize a display name for use as a filename
+    Removes filesystem-unsafe characters while keeping readability
+    Example: "Grop's: Dreamland!" -> "Grop's Dreamland!"
+    """
+    import re
+    # Remove characters that are illegal on Windows/Mac/Linux
+    # Keep: letters, numbers, spaces, hyphens, underscores, apostrophes, parentheses
+    sanitized = re.sub(r'[<>:"/\\|?*]', '', name)
+    # Remove leading/trailing whitespace
+    sanitized = sanitized.strip()
+    return sanitized
+
 # Mapping of stage codes to default screenshot filenames
 DAS_DEFAULT_SCREENSHOTS = {
     'GrNBa': 'battlefield.jpg',
@@ -3035,25 +3049,42 @@ def das_get_stage_variants(stage_code):
             metadata_variants = {v['id']: v for v in stage_metadata.get('variants', [])}
 
             for stage_file in stage_folder.glob(file_pattern):
-                variant_id = stage_file.stem
+                filename_stem = stage_file.stem  # e.g., "Autumn Dreamland" or "Autumn Dreamland(B)"
 
-                # Extract button indicator (e.g., vanilla(B) -> B)
-                button = extract_button_indicator(variant_id)
+                # Extract button indicator (e.g., "Autumn Dreamland(B)" -> "B")
+                button = extract_button_indicator(filename_stem)
 
-                # Strip button indicator for screenshot lookup
-                # e.g., vanilla(B).dat → vanilla_screenshot.png
-                variant_id_for_screenshot = strip_button_indicator(variant_id)
+                # Strip button indicator for matching
+                # e.g., "Autumn Dreamland(B)" -> "Autumn Dreamland"
+                display_name_from_file = strip_button_indicator(filename_stem)
 
-                # Check if screenshot exists in storage (single source of truth)
-                # Screenshot name matches the .dat filename (without button indicator)
-                # e.g., vanilla(B).dat → vanilla_screenshot.png
+                # Reverse-lookup: display name -> variant_id using metadata
+                # This allows us to find the screenshot which is named with variant_id
+                variant_id_for_screenshot = None
+                variant_meta = {}
+
+                # Try to match display name to variant in metadata
+                sanitized_display_name = sanitize_filename(display_name_from_file).lower()
+                for vid, vmeta in metadata_variants.items():
+                    variant_display_name = vmeta.get('name', vid)
+                    if sanitize_filename(variant_display_name).lower() == sanitized_display_name:
+                        variant_id_for_screenshot = vid  # This is the storage filename (without .zip)
+                        variant_meta = vmeta
+                        logger.info(f"Matched display name '{display_name_from_file}' to variant_id '{vid}'")
+                        break
+
+                # Fallback: if no match in metadata, treat filename as variant_id (backwards compatibility)
+                if variant_id_for_screenshot is None:
+                    variant_id_for_screenshot = display_name_from_file
+                    variant_meta = metadata_variants.get(variant_id_for_screenshot, {})
+                    logger.info(f"No metadata match for '{display_name_from_file}', using as variant_id (backwards compatibility)")
+
+                # Check if screenshot exists in storage
+                # Screenshot is always named with variant_id, not display name
                 storage_screenshot = STORAGE_PATH / 'das' / stage_folder_name / f"{variant_id_for_screenshot}_screenshot.png"
 
-                # Get metadata for this variant (use stripped name for lookup)
-                variant_meta = metadata_variants.get(variant_id_for_screenshot, {})
-
                 variants.append({
-                    'name': variant_id,
+                    'name': filename_stem,  # Display name with button indicator (what user sees in files)
                     'filename': stage_file.name,
                     'stageCode': stage_code,
                     'button': button,  # Button indicator (B, X, Y, L, R, Z) or None
@@ -3194,16 +3225,36 @@ def das_import_variant():
             stage_file = stage_files[0]
             stage_data = zip_ref.read(stage_file)
 
-            # Use mod name from ZIP filename instead of sequential numbering
+            # Get variant_id from ZIP filename
             variant_id = Path(full_variant_path).stem  # e.g., "autumn-dreamland"
-            final_name = variant_id
+
+            # Load metadata to get display name
+            metadata_file = STORAGE_PATH / 'metadata.json'
+            display_name = variant_id  # Fallback to variant_id if metadata not found
+
+            if metadata_file.exists():
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+
+                stage_folder_name = DAS_STAGES[stage_code]['folder']
+                stage_metadata = metadata.get('stages', {}).get(stage_folder_name, {})
+
+                # Find the variant in metadata by id
+                for variant in stage_metadata.get('variants', []):
+                    if variant['id'] == variant_id:
+                        display_name = variant.get('name', variant_id)
+                        logger.info(f"Found display name in metadata: '{display_name}' for variant_id '{variant_id}'")
+                        break
+
+            # Use sanitized display name for filename
+            final_name = sanitize_filename(display_name)
             final_path = stage_folder / f"{final_name}{file_ext}"
 
             # If file already exists, append suffix to avoid conflicts
             if final_path.exists():
                 count = 1
                 while True:
-                    final_name = f"{variant_id}_{count}"
+                    final_name = f"{sanitize_filename(display_name)}_{count}"
                     final_path = stage_folder / f"{final_name}{file_ext}"
                     if not final_path.exists():
                         break
@@ -3491,6 +3542,18 @@ def rename_storage_stage():
         stage_data = metadata['stages'][stage_folder]
         variants = stage_data.get('variants', [])
         logger.info(f"Found stage folder {stage_folder}, variants: {[v['id'] for v in variants]}")
+
+        # Check for duplicate display names (case-insensitive, sanitized comparison)
+        sanitized_new_name = sanitize_filename(new_name).lower()
+        for variant in variants:
+            if variant['id'] != variant_id:  # Don't check against itself
+                existing_name = sanitize_filename(variant.get('name', '')).lower()
+                if existing_name == sanitized_new_name:
+                    logger.error(f"Duplicate name found: '{new_name}' matches existing variant '{variant['name']}'")
+                    return jsonify({
+                        'success': False,
+                        'error': f"A variant named '{variant['name']}' already exists in this stage"
+                    }), 400
 
         variant_found = False
 
