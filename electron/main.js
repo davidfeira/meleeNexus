@@ -163,6 +163,71 @@ ipcMain.handle('select-directory-dialog', async () => {
   return result.filePaths[0];
 });
 
+// Register nucleus:// protocol handler
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('nucleus', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('nucleus');
+}
+
+// Handle nucleus:// URLs
+const handleNucleusUrl = async (url) => {
+  console.log('[Nucleus Protocol] Received URL:', url);
+
+  // Parse nucleus://import?url=...&name=...&title=...
+  const urlObj = new URL(url);
+  const action = urlObj.hostname; // 'import'
+  const downloadUrl = urlObj.searchParams.get('url');
+  const modName = urlObj.searchParams.get('name');
+  const modTitle = urlObj.searchParams.get('title');
+
+  if (action === 'import' && downloadUrl) {
+    console.log('[Nucleus Protocol] Importing mod:', modName, 'from', downloadUrl);
+
+    // Show window if hidden
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+
+      // Send message to renderer to trigger import
+      mainWindow.webContents.send('nucleus-import', {
+        url: downloadUrl,
+        name: modName,
+        title: modTitle
+      });
+    }
+  }
+};
+
+// Handle protocol URLs on macOS/Linux (when app is already running)
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleNucleusUrl(url);
+});
+
+// Handle protocol URLs on Windows (when app is already running or being launched)
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance with a nucleus:// URL
+    // Focus our window and handle the URL
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+
+    // The nucleus:// URL is in commandLine
+    const url = commandLine.find(arg => arg.startsWith('nucleus://'));
+    if (url) {
+      handleNucleusUrl(url);
+    }
+  });
+}
+
 // App lifecycle
 app.whenReady().then(() => {
   console.log('[Electron] App ready');
@@ -180,6 +245,14 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+
+  // Handle nucleus:// URL if app was launched with one
+  if (process.platform === 'win32') {
+    const url = process.argv.find(arg => arg.startsWith('nucleus://'));
+    if (url) {
+      setTimeout(() => handleNucleusUrl(url), 3000); // Wait for Flask + window
+    }
+  }
 });
 
 app.on('window-all-closed', () => {

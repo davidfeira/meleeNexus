@@ -24,7 +24,19 @@ contextBridge.exposeInMainWorld('electron', {
    * Check if running in Electron
    * @returns {boolean} Always returns true
    */
-  isElectron: true
+  isElectron: true,
+
+  /**
+   * Listen for nucleus:// protocol imports
+   * @param {function} callback Function called with {url, name} when import is triggered
+   * @returns {function} Cleanup function to remove listener
+   */
+  onNucleusImport: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('nucleus-import', listener);
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('nucleus-import', listener);
+  }
 });
 
 // Log that preload script loaded successfully

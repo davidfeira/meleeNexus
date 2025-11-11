@@ -2212,6 +2212,9 @@ def import_file():
         # Get slippi_action parameter (can be "fix", "import_as_is", or None)
         slippi_action = request.form.get('slippi_action')
 
+        # Get custom_title parameter if provided (for nucleus:// imports)
+        custom_title = request.form.get('custom_title')
+
         # Save uploaded file to temp location with correct suffix
         suffix = '.zip' if is_zip else '.7z'
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -2278,7 +2281,7 @@ def import_file():
                 imported_skin_ids = {}  # Track actual skin IDs: costume_code -> skin_id
                 for character_info in character_infos_sorted:
                     logger.info(f"  - Importing {character_info['character']} - {character_info['color']}")
-                    result = import_character_costume(temp_zip_path, character_info, file.filename, auto_fix=auto_fix)
+                    result = import_character_costume(temp_zip_path, character_info, file.filename, auto_fix=auto_fix, custom_name=custom_title)
                     if result.get('success'):
                         results.append({
                             'character': character_info['character'],
@@ -2311,7 +2314,7 @@ def import_file():
                 results = []
                 for stage_info in stage_infos:
                     logger.info(f"  - Importing {stage_info['stage_name']}")
-                    result = import_stage_mod(temp_zip_path, stage_info, file.filename)
+                    result = import_stage_mod(temp_zip_path, stage_info, file.filename, custom_name=custom_title)
                     if result.get('success'):
                         results.append({
                             'stage': stage_info['stage_name'],
@@ -2464,7 +2467,7 @@ def extract_custom_name_from_filename(filename: str, character_name: str) -> str
     return base_name
 
 
-def import_character_costume(zip_path: str, char_info: dict, original_filename: str, auto_fix: bool = False) -> dict:
+def import_character_costume(zip_path: str, char_info: dict, original_filename: str, auto_fix: bool = False, custom_name: str = None) -> dict:
     """
     Import a character costume to storage.
 
@@ -2473,6 +2476,7 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         char_info: Character detection info
         original_filename: Original filename of the upload
         auto_fix: If True, apply slippi fixes to the DAT file
+        custom_name: Optional custom name to use instead of extracting from filename
     """
     try:
         # Load metadata
@@ -2497,8 +2501,9 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         char_data = metadata.get('characters', {}).get(character, {'skins': []})
         existing_ids = [skin['id'] for skin in char_data.get('skins', [])]
 
-        # Try to extract custom name from filename
-        custom_name = extract_custom_name_from_filename(original_filename, character)
+        # Use provided custom name, or extract from filename
+        if not custom_name:
+            custom_name = extract_custom_name_from_filename(original_filename, character)
 
         # Extract descriptive name from DAT filename (remove .dat extension and clean up)
         dat_basename = os.path.splitext(os.path.basename(char_info['dat_file']))[0]
@@ -2701,10 +2706,13 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         if character not in metadata['characters']:
             metadata['characters'][character] = {'skins': []}
 
+        # Determine display name: use custom_name if provided, otherwise use DAT filename
+        display_name = custom_name if custom_name else dat_name_clean
+
         # Build skin entry
         skin_entry = {
             'id': skin_id,
-            'color': dat_name_clean,  # Use descriptive DAT filename instead of generic color
+            'color': display_name,  # Display name shown in UI
             'costume_code': char_info['costume_code'],
             'filename': f"{skin_id}.zip",
             'has_csp': csp_data is not None,
@@ -2759,7 +2767,7 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         }
 
 
-def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str) -> dict:
+def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str, custom_name: str = None) -> dict:
     """Import a stage mod to storage"""
     try:
         # Load metadata
@@ -2785,8 +2793,13 @@ def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str) ->
         stage_data = metadata.get('stages', {}).get(stage_folder_name, {'variants': []})
         existing_ids = [v['id'] for v in stage_data.get('variants', [])]
 
-        # Generate sequential ID based on original filename
-        base_name = Path(original_filename).stem.lower().replace(' ', '-')
+        # Generate sequential ID based on custom_name or original filename
+        if custom_name:
+            # Limit stage names to 10 characters to prevent crashes
+            base_name = custom_name[:10].lower().replace(' ', '-')
+        else:
+            base_name = Path(original_filename).stem.lower().replace(' ', '-')
+
         variant_id = base_name
         counter = 1
         while variant_id in existing_ids:
@@ -2830,11 +2843,8 @@ def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str) ->
         if stage_folder_name not in metadata['stages']:
             metadata['stages'][stage_folder_name] = {'variants': []}
 
-        # Use the DAT filename (without extension) as the display name
-        stage_file_basename = os.path.basename(stage_info['stage_file'])
-        display_name = os.path.splitext(stage_file_basename)[0]
-        # Clean up the display name: replace underscores with spaces
-        display_name = display_name.replace('_', ' ')
+        # Use variant_id as display name (it's already limited to 10 chars and uses custom_name if provided)
+        display_name = variant_id
 
         metadata['stages'][stage_folder_name]['variants'].append({
             'id': variant_id,
