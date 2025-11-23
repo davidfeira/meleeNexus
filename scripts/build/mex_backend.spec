@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 # In PyInstaller spec files, use SPECPATH instead of __file__
-project_root = Path(SPECPATH)
+# SPECPATH is scripts/build, so go up 2 directories to reach project root
+project_root = Path(SPECPATH).parent.parent
 
 # Platform detection for executable naming
 IS_WINDOWS = sys.platform == 'win32'
@@ -167,7 +168,8 @@ binaries = []
 # =============================================================================
 
 a = Analysis(
-    ['backend/mex_api.py', 'scripts/tools/mex_bridge.py'],
+    [str(project_root / 'backend' / 'mex_api.py'),
+     str(project_root / 'scripts' / 'tools' / 'mex_bridge.py')],
     pathex=additional_paths,
     binaries=binaries,
     datas=datas,

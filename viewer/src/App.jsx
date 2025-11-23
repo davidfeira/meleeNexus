@@ -25,6 +25,12 @@ function App() {
         console.log('[Nucleus] Import triggered:', data);
         const { url, name, title } = data;
 
+        console.log('[Nucleus DEBUG] url:', url);
+        console.log('[Nucleus DEBUG] name:', name);
+        console.log('[Nucleus DEBUG] title:', title);
+        console.log('[Nucleus DEBUG] title type:', typeof title);
+        console.log('[Nucleus DEBUG] title length:', title?.length);
+
         try {
           // Download the file from the URL
           const response = await fetch(url);
@@ -35,8 +41,12 @@ function App() {
           formData.append('file', blob, `${name || 'mod'}.zip`);
 
           // Add custom title if provided
+          console.log('[Nucleus DEBUG] About to check title:', title, 'truthy?', !!title);
           if (title) {
+            console.log('[Nucleus DEBUG] Adding custom_title to formData:', title);
             formData.append('custom_title', title);
+          } else {
+            console.log('[Nucleus DEBUG] NOT adding custom_title - title is falsy');
           }
 
           // Trigger import via existing API

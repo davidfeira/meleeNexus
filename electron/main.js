@@ -183,8 +183,15 @@ const handleNucleusUrl = async (url) => {
   const modName = urlObj.searchParams.get('name');
   const modTitle = urlObj.searchParams.get('title');
 
+  console.log('[Nucleus Protocol DEBUG] action:', action);
+  console.log('[Nucleus Protocol DEBUG] downloadUrl:', downloadUrl);
+  console.log('[Nucleus Protocol DEBUG] modName:', modName);
+  console.log('[Nucleus Protocol DEBUG] modTitle:', modTitle);
+  console.log('[Nucleus Protocol DEBUG] modTitle type:', typeof modTitle);
+  console.log('[Nucleus Protocol DEBUG] modTitle length:', modTitle?.length);
+
   if (action === 'import' && downloadUrl) {
-    console.log('[Nucleus Protocol] Importing mod:', modName, 'from', downloadUrl);
+    console.log('[Nucleus Protocol] Importing mod:', modName, 'title:', modTitle, 'from', downloadUrl);
 
     // Show window if hidden
     if (mainWindow) {

@@ -2242,6 +2242,7 @@ def import_file():
 
         # Get custom_title parameter if provided (for nucleus:// imports)
         custom_title = request.form.get('custom_title')
+        logger.info(f"[DEBUG] custom_title from form: '{custom_title}' (type: {type(custom_title).__name__})")
 
         # Save uploaded file to temp location with correct suffix
         suffix = '.zip' if is_zip else '.7z'
@@ -2309,6 +2310,7 @@ def import_file():
                 imported_skin_ids = {}  # Track actual skin IDs: costume_code -> skin_id
                 for character_info in character_infos_sorted:
                     logger.info(f"  - Importing {character_info['character']} - {character_info['color']}")
+                    logger.info(f"[DEBUG] Calling import_character_costume with custom_name='{custom_title}'")
                     result = import_character_costume(temp_zip_path, character_info, file.filename, auto_fix=auto_fix, custom_name=custom_title)
                     if result.get('success'):
                         results.append({
@@ -2529,9 +2531,14 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         char_data = metadata.get('characters', {}).get(character, {'skins': []})
         existing_ids = [skin['id'] for skin in char_data.get('skins', [])]
 
+        logger.info(f"[DEBUG import_character_costume] custom_name parameter: '{custom_name}' (type: {type(custom_name).__name__})")
+        logger.info(f"[DEBUG import_character_costume] original_filename: '{original_filename}'")
+
         # Use provided custom name, or extract from filename
         if not custom_name:
+            logger.info(f"[DEBUG] custom_name is falsy, extracting from filename")
             custom_name = extract_custom_name_from_filename(original_filename, character)
+            logger.info(f"[DEBUG] Extracted custom_name from filename: '{custom_name}'")
 
         # Extract descriptive name from DAT filename (remove .dat extension and clean up)
         dat_basename = os.path.splitext(os.path.basename(char_info['dat_file']))[0]
@@ -2736,6 +2743,7 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
 
         # Determine display name: use custom_name if provided, otherwise use DAT filename
         display_name = custom_name if custom_name else dat_name_clean
+        logger.info(f"[DEBUG] Final display_name: '{display_name}' (custom_name: '{custom_name}', dat_name_clean: '{dat_name_clean}')")
 
         # Build skin entry
         skin_entry = {

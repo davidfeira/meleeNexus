@@ -19,5 +19,8 @@ actual custom stages movesets patches
 
 +(fix game and watch)
 
-delete output folder shit after 'download'
-when i select all dreamland and import it imports all stages all skins
+
+================
+
+make stage image editable
+hide HSD
