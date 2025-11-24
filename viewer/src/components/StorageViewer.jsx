@@ -51,12 +51,12 @@ export default function StorageViewer({ metadata, onRefresh }) {
   const [contextMenu, setContextMenu] = useState(null) // { x, y, type: 'skin'/'variant', item, index }
   const [previewOrder, setPreviewOrder] = useState(null) // Live preview of reordered items during drag
 
-  // Fetch stage variants when in stages mode
+  // Fetch stage variants when in stages mode or when metadata changes
   useEffect(() => {
     if (mode === 'stages') {
       fetchStageVariants()
     }
-  }, [mode])
+  }, [mode, metadata])
 
   const fetchStageVariants = async () => {
     try {
@@ -115,9 +115,20 @@ export default function StorageViewer({ metadata, onRefresh }) {
           ? `${data.imported_count} costume(s)`
           : `${data.stage} stage`
         setImportMessage(`✓ Imported ${typeMsg}! Refreshing...`)
+
+        // Refresh metadata
+        await onRefresh()
+
+        // If we imported a stage, also refresh stage variants
+        if (data.type === 'stage' && mode === 'stages') {
+          await fetchStageVariants()
+        }
+
+        setImportMessage(`✓ Successfully imported ${typeMsg}!`)
         setTimeout(() => {
-          window.location.reload()
-        }, 1500)
+          setImporting(false)
+          setImportMessage('')
+        }, 2000)
       } else {
         setImportMessage(`✗ Import failed: ${data.error}`)
         setTimeout(() => {
@@ -1256,8 +1267,8 @@ export default function StorageViewer({ metadata, onRefresh }) {
 
   // If a stage is selected, show its variants
   if (selectedStage) {
-    const stageInfo = DAS_STAGES.find(s => s.code === selectedStage)
-    const variants = stageVariants[selectedStage] || []
+    const stageInfo = selectedStage
+    const variants = stageVariants[selectedStage.code] || []
 
     return (
       <div className="storage-viewer">
@@ -1594,7 +1605,7 @@ export default function StorageViewer({ metadata, onRefresh }) {
               <div
                 key={stage.code}
                 className="character-card"
-                onClick={() => setSelectedStage(stage.code)}
+                onClick={() => setSelectedStage(stage)}
               >
                 <div className="character-image-container">
                   <img

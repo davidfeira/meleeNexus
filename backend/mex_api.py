@@ -3212,31 +3212,55 @@ def das_list_storage_variants():
 
             # Get variants from metadata for this stage
             stage_metadata = metadata.get('stages', {}).get(stage_folder, {})
-            metadata_variants = {v['id']: v for v in stage_metadata.get('variants', [])}
+            metadata_variants_list = stage_metadata.get('variants', [])
 
             if stage_storage_path.exists():
-                # Look for .zip files and their associated screenshots
-                for zip_file in stage_storage_path.glob('*.zip'):
-                    variant_id = zip_file.stem
+                # Build a lookup of all zip files that exist on disk
+                zip_files = {zip_file.stem: zip_file for zip_file in stage_storage_path.glob('*.zip')}
 
-                    # Get data from metadata, fallback to defaults if not found
-                    variant_meta = metadata_variants.get(variant_id, {})
-                    variant_name = variant_meta.get('name', variant_id)
+                # First, add variants in metadata order (if they exist on disk)
+                for variant_meta in metadata_variants_list:
+                    variant_id = variant_meta['id']
+                    zip_file = zip_files.get(variant_id)
 
-                    # Check for screenshot in storage (single source of truth)
+                    # Only add if the zip file actually exists
+                    if zip_file:
+                        variant_name = variant_meta.get('name', variant_id)
+
+                        # Check for screenshot in storage (single source of truth)
+                        storage_screenshot = stage_storage_path / f"{variant_id}_screenshot.png"
+
+                        variants.append({
+                            'stageCode': code,
+                            'stageName': stage_info['name'],
+                            'id': variant_id,  # ← Immutable ID (filename)
+                            'name': variant_name,  # ← Editable display name
+                            'zipPath': str(zip_file.relative_to(PROJECT_ROOT)),
+                            'hasScreenshot': storage_screenshot.exists(),
+                            'screenshotUrl': f"/storage/das/{stage_info['folder']}/{variant_id}_screenshot.png" if storage_screenshot.exists() else None,
+                            'slippi_safe': variant_meta.get('slippi_safe'),
+                            'slippi_tested': variant_meta.get('slippi_tested', False),
+                            'slippi_test_date': variant_meta.get('slippi_test_date')
+                        })
+
+                        # Remove from zip_files so we don't add it again
+                        del zip_files[variant_id]
+
+                # Then, add any remaining zip files that aren't in metadata (shouldn't happen normally)
+                for variant_id, zip_file in zip_files.items():
                     storage_screenshot = stage_storage_path / f"{variant_id}_screenshot.png"
 
                     variants.append({
                         'stageCode': code,
                         'stageName': stage_info['name'],
-                        'id': variant_id,  # ← Immutable ID (filename)
-                        'name': variant_name,  # ← Editable display name
+                        'id': variant_id,
+                        'name': variant_id,  # Fallback: use ID as name
                         'zipPath': str(zip_file.relative_to(PROJECT_ROOT)),
                         'hasScreenshot': storage_screenshot.exists(),
                         'screenshotUrl': f"/storage/das/{stage_info['folder']}/{variant_id}_screenshot.png" if storage_screenshot.exists() else None,
-                        'slippi_safe': variant_meta.get('slippi_safe'),
-                        'slippi_tested': variant_meta.get('slippi_tested', False),
-                        'slippi_test_date': variant_meta.get('slippi_test_date')
+                        'slippi_safe': None,
+                        'slippi_tested': False,
+                        'slippi_test_date': None
                     })
 
         return jsonify({

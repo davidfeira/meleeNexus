@@ -620,6 +620,7 @@ const MexPanel = () => {
     setRefreshing(true);
     await Promise.all([
       fetchFighters(),
+      fetchStorageCostumes(),
       selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
     ]);
     setRefreshing(false);
@@ -1349,7 +1350,16 @@ const MexPanel = () => {
           </button>
           <button
             className="action-btn"
-            onClick={fetchFighters}
+            onClick={async () => {
+              setRefreshing(true);
+              await Promise.all([
+                fetchFighters(),
+                fetchStorageCostumes(),
+                selectedFighter ? fetchMexCostumes(selectedFighter.name) : Promise.resolve()
+              ]);
+              setRefreshing(false);
+            }}
+            disabled={refreshing}
           >
             Refresh
           </button>
