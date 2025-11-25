@@ -508,12 +508,17 @@ def serve_storage(file_path):
             return jsonify({'success': False, 'error': f'File not found: {file_path}'}), 404
 
         # Determine mimetype based on extension
-        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-            mimetype = 'image/png'
-        elif file_path.lower().endswith('.zip'):
-            mimetype = 'application/zip'
-        else:
-            mimetype = 'application/octet-stream'
+        ext = os.path.splitext(file_path.lower())[1]
+        mimetype_map = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
+            '.gif': 'image/gif',
+            '.bmp': 'image/bmp',
+            '.zip': 'application/zip'
+        }
+        mimetype = mimetype_map.get(ext, 'application/octet-stream')
 
         logger.info(f"✓ Serving storage file: {full_path}")
         return send_file(full_path, mimetype=mimetype)

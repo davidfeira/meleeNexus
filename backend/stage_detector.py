@@ -53,7 +53,7 @@ def build_screenshot_indexes(zf: zipfile.ZipFile, filenames: List[str]) -> Tuple
     Returns:
         Tuple of (screenshots_by_name, screenshots_by_code, screenshots_by_folder)
     """
-    image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+    image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
 
     screenshots_by_name = {}  # Cleaned basename -> (filename, aspect_ratio)
     screenshots_by_code = {}  # Stage code -> [(filename, aspect_ratio, folder)]
@@ -281,7 +281,7 @@ def find_screenshot_in_zip(zf: zipfile.ZipFile, filenames: List[str]) -> Optiona
     Returns:
         Filename of screenshot, or None
     """
-    image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+    image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
     priority_names = ['screenshot', 'preview', 'stage', 'icon', 'banner']
 
     # First pass: Look for priority names
