@@ -40,6 +40,12 @@ namespace HSDRawViewer
         private StreamWriter _logWriter;
         private string _logPath;
 
+        // Animation state
+        private bool _animationPlaying = false;
+        private float _animationFrame = 0;
+        private float _animationFrameCount = 0;
+        private float _animationSpeed = 1.0f;
+
         public StreamingServer(int port, string logPath = null)
         {
             _port = port;
@@ -246,13 +252,12 @@ namespace HSDRawViewer
                     {
                         Log($"Loading animation (FrameCount: {sceneSettings.Animation.FrameCount})");
                         _renderJObj.LoadAnimation(sceneSettings.Animation, null, null);
+                        _animationFrameCount = sceneSettings.Animation.FrameCount;
 
                         // Set to the specified frame
-                        if (sceneSettings.Frame >= 0)
-                        {
-                            Log($"Setting animation frame: {sceneSettings.Frame}");
-                            _renderJObj.RequestAnimationUpdate(FrameFlags.All, sceneSettings.Frame);
-                        }
+                        _animationFrame = Math.Max(0, sceneSettings.Frame);
+                        Log($"Setting animation frame: {_animationFrame}");
+                        _renderJObj.RequestAnimationUpdate(FrameFlags.All, _animationFrame);
                     }
 
                     // Apply other scene settings
@@ -399,7 +404,7 @@ namespace HSDRawViewer
 
             try
             {
-                // Send initial info with camera state
+                // Send initial info with camera state and animation info
                 var info = new
                 {
                     type = "info",
@@ -415,10 +420,17 @@ namespace HSDRawViewer
                         x = _viewport.Camera.X,
                         y = _viewport.Camera.Y,
                         z = _viewport.Camera.Z
+                    },
+                    animation = new
+                    {
+                        frameCount = _animationFrameCount,
+                        currentFrame = _animationFrame,
+                        playing = _animationPlaying,
+                        speed = _animationSpeed
                     }
                 };
                 await SendJsonAsync(webSocket, info);
-                Log($"Sent initial info: {_frameWidth}x{_frameHeight} @ {_targetFps}fps, camera scale={_viewport.Camera.Scale}");
+                Log($"Sent initial info: {_frameWidth}x{_frameHeight} @ {_targetFps}fps, animation frames={_animationFrameCount}");
 
                 // Create receive task
                 var receiveTask = ReceiveMessagesAsync(webSocket, receiveBuffer);
@@ -442,6 +454,19 @@ namespace HSDRawViewer
                             _hostForm.Invoke((Action)(() =>
                             {
                                 Application.DoEvents();
+
+                                // Update animation if playing
+                                if (_animationPlaying && _animationFrameCount > 0 && _renderJObj != null)
+                                {
+                                    _animationFrame += _animationSpeed;
+                                    if (_animationFrame >= _animationFrameCount)
+                                        _animationFrame = 0;
+                                    else if (_animationFrame < 0)
+                                        _animationFrame = _animationFrameCount - 1;
+
+                                    _renderJObj.RequestAnimationUpdate(FrameFlags.All, _animationFrame);
+                                }
+
                                 bitmap = _viewport.GenerateBitmap(_frameWidth, _frameHeight);
                             }));
 
@@ -576,6 +601,39 @@ namespace HSDRawViewer
                         {
                             _targetFps = Math.Clamp(fps.GetInt32(), 1, 60);
                             Log($"FPS changed to {_targetFps}");
+                        }
+                        break;
+
+                    case "animPlay":
+                        _animationPlaying = true;
+                        Log("Animation playing");
+                        break;
+
+                    case "animPause":
+                        _animationPlaying = false;
+                        Log("Animation paused");
+                        break;
+
+                    case "animToggle":
+                        _animationPlaying = !_animationPlaying;
+                        Log($"Animation {(_animationPlaying ? "playing" : "paused")}");
+                        break;
+
+                    case "animSetFrame":
+                        if (root.TryGetProperty("frame", out var frameVal))
+                        {
+                            _animationFrame = (float)frameVal.GetDouble();
+                            _animationFrame = Math.Clamp(_animationFrame, 0, Math.Max(0, _animationFrameCount - 1));
+                            if (_renderJObj != null)
+                                _renderJObj.RequestAnimationUpdate(FrameFlags.All, _animationFrame);
+                        }
+                        break;
+
+                    case "animSetSpeed":
+                        if (root.TryGetProperty("speed", out var speedVal))
+                        {
+                            _animationSpeed = (float)speedVal.GetDouble();
+                            Log($"Animation speed: {_animationSpeed}");
                         }
                         break;
 

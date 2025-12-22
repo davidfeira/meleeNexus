@@ -22,6 +22,11 @@ const ModelViewer = ({ character, skinId, onClose }) => {
   const [dragButton, setDragButton] = useState(null) // 0 = left (rotate), 2 = right (pan)
   const lastMousePos = useRef({ x: 0, y: 0 })
 
+  // Animation state
+  const [animPlaying, setAnimPlaying] = useState(false)
+  const [animFrame, setAnimFrame] = useState(0)
+  const [animFrameCount, setAnimFrameCount] = useState(0)
+
   // Start the viewer backend
   const startViewer = useCallback(async () => {
     // Prevent double-start from React StrictMode
@@ -78,6 +83,12 @@ const ModelViewer = ({ character, skinId, onClose }) => {
             const msg = JSON.parse(event.data)
             if (msg.type === 'info') {
               setViewerInfo(msg)
+              // Update animation state from server
+              if (msg.animation) {
+                setAnimFrameCount(msg.animation.frameCount || 0)
+                setAnimFrame(msg.animation.currentFrame || 0)
+                setAnimPlaying(msg.animation.playing || false)
+              }
             }
           } catch (e) {
             console.log('Non-JSON message:', event.data)
@@ -127,6 +138,21 @@ const ModelViewer = ({ character, skinId, onClose }) => {
         type: 'camera',
         ...deltas
       }))
+    }
+  }, [])
+
+  // Animation controls
+  const toggleAnimation = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'animToggle' }))
+      setAnimPlaying(p => !p)
+    }
+  }, [])
+
+  const setAnimationFrame = useCallback((frame) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'animSetFrame', frame }))
+      setAnimFrame(frame)
     }
   }, [])
 
@@ -256,6 +282,31 @@ const ModelViewer = ({ character, skinId, onClose }) => {
             />
           )}
         </div>
+
+        {/* Animation controls */}
+        {animFrameCount > 0 && (
+          <div className="model-viewer-animation-controls">
+            <button
+              className="anim-play-btn"
+              onClick={toggleAnimation}
+              title={animPlaying ? 'Pause' : 'Play'}
+            >
+              {animPlaying ? '⏸' : '▶'}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(0, animFrameCount - 1)}
+              step="1"
+              value={animFrame}
+              onChange={(e) => setAnimationFrame(parseFloat(e.target.value))}
+              className="anim-slider"
+            />
+            <span className="anim-frame-info">
+              {Math.floor(animFrame)} / {Math.floor(animFrameCount)}
+            </span>
+          </div>
+        )}
 
         <div className="model-viewer-footer">
           <span className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>

@@ -1260,6 +1260,71 @@
   color: var(--color-text-muted);
 }
 
+/* Animation Controls */
+.model-viewer-animation-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.anim-play-btn {
+  background: var(--color-accent);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+}
+
+.anim-play-btn:hover {
+  background: var(--color-accent-hover);
+}
+
+.anim-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.anim-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--color-accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.anim-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--color-accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.anim-frame-info {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  min-width: 60px;
+  text-align: right;
+}
+
 /* View 3D Button in Edit Modal */
 .btn-view3d {
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
