@@ -15,7 +15,7 @@ camera:
 settings:
   renderBones: false
   renderOrientation: false
-  renderObjects: true
+  renderObjects: Visible
   outlineSelected: false
 lighting:
   useCameraLight: false

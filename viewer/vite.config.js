@@ -10,6 +10,11 @@ export default defineConfig({
     port: 3000,
     open: false, // Don't auto-open browser in Electron mode
     proxy: {
+      // Proxy /api requests to Flask backend
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true
+      },
       // Proxy /storage requests to Flask backend (single source of truth)
       '/storage': {
         target: 'http://127.0.0.1:5000',

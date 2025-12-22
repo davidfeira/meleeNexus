@@ -54,6 +54,15 @@ namespace HSDRawViewer
                 return;
             }
 
+            // Check for streaming mode
+            if (args.Length >= 3 && args[0] == "--stream")
+            {
+                AllocConsole();
+                Console.WriteLine("Streaming mode detected");
+                RunStreamingServer(args);
+                return;
+            }
+
             Console.WriteLine("Starting normal GUI mode");
             // Normal GUI mode
             Application.EnableVisualStyles();
@@ -67,6 +76,50 @@ namespace HSDRawViewer
             if (args.Length > 0)
                 MainForm.Instance.OpenFile(args[0]);
             Application.Run(MainForm.Instance);
+        }
+
+        static void RunStreamingServer(string[] args)
+        {
+            try
+            {
+                if (args.Length < 3)
+                {
+                    Console.WriteLine("Usage: HSDRawViewer.exe --stream <port> <dat_file> [logs_path] [scene_file]");
+                    Console.WriteLine("Example: HSDRawViewer.exe --stream 8765 PlFxNr.dat C:\\projects\\logs scene.yml");
+                    return;
+                }
+
+                int port = int.Parse(args[1]);
+                string datFile = args[2];
+                string logsPath = args.Length >= 4 ? args[3] : null;
+                string sceneFile = args.Length >= 5 ? args[4] : null;
+
+                Console.WriteLine($"Starting streaming server on port {port}...");
+                Console.WriteLine($"DAT file: {datFile}");
+                if (logsPath != null)
+                    Console.WriteLine($"Logs path: {logsPath}");
+                if (sceneFile != null)
+                    Console.WriteLine($"Scene file: {sceneFile}");
+
+                using var server = new StreamingServer(port, logsPath);
+
+                // Handle Ctrl+C
+                Console.CancelKeyPress += (sender, e) =>
+                {
+                    e.Cancel = true;
+                    Console.WriteLine("Shutdown requested...");
+                    server.Stop();
+                };
+
+                // Run server (blocking)
+                server.StartAsync(datFile, sceneFile).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Streaming server error: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                Environment.Exit(1);
+            }
         }
 
         static void RunCSPGeneration(string[] args)

@@ -3,6 +3,7 @@ import { io } from 'socket.io-client'
 import './StorageViewer.css'
 import './IsoBuilder.css'
 import { DEFAULT_CHARACTERS } from '../defaultCharacters'
+import ModelViewer from './ModelViewer'
 
 const API_URL = 'http://127.0.0.1:5000/api/mex'
 const BACKEND_URL = 'http://127.0.0.1:5000'
@@ -94,6 +95,7 @@ export default function StorageViewer({ metadata, onRefresh }) {
   const [stockPreview, setStockPreview] = useState(null) // Preview URL for new stock
   const [editSlippiSafe, setEditSlippiSafe] = useState(null) // Track slippi changes for stages
   const [lastImageUpdate, setLastImageUpdate] = useState(Date.now()) // For cache-busting images
+  const [show3DViewer, setShow3DViewer] = useState(false) // 3D model viewer
 
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState(null) // { index, id }
@@ -1560,6 +1562,15 @@ export default function StorageViewer({ metadata, onRefresh }) {
 
             {/* Buttons */}
             <div className="edit-buttons">
+              {editingItem.type === 'costume' && (
+                <button
+                  className="btn-view3d"
+                  onClick={() => setShow3DViewer(true)}
+                  disabled={saving || deleting || exporting}
+                >
+                  View 3D
+                </button>
+              )}
               <button
                 className="btn-save"
                 onClick={handleSave}
@@ -1591,6 +1602,15 @@ export default function StorageViewer({ metadata, onRefresh }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3D Model Viewer */}
+      {show3DViewer && editingItem && editingItem.type === 'costume' && (
+        <ModelViewer
+          character={editingItem.data.character}
+          skinId={editingItem.data.id}
+          onClose={() => setShow3DViewer(false)}
+        />
       )}
     </>
   )

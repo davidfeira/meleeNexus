@@ -100,6 +100,12 @@ else:
         # On Linux in dev mode, look for linux-x64 build
         MEXCLI_PATH = PROJECT_ROOT / "utility/MexManager/MexCLI/bin/Release/net6.0/linux-x64/mexcli"
 
+# HSDRawViewer path for 3D model streaming
+if getattr(sys, 'frozen', False):
+    HSDRAW_EXE = RESOURCES_DIR / "utility/HSDRawViewer/HSDRawViewer.exe"
+else:
+    HSDRAW_EXE = PROJECT_ROOT / "utility/website/backend/tools/HSDLib/HSDRawViewer/bin/Release/net6.0-windows/HSDRawViewer.exe"
+
 # User data paths (writable locations)
 MEX_PROJECT_PATH = PROJECT_ROOT / "build/project.mexproj"
 STORAGE_PATH = PROJECT_ROOT / "storage"
@@ -188,6 +194,10 @@ logger = logging.getLogger(__name__)
 # Global MEX manager instance and current project path
 mex_manager = None
 current_project_path = None
+
+# Global 3D viewer process
+viewer_process = None
+viewer_port = None
 
 def get_mex_manager():
     """Get or initialize MEX manager instance"""
@@ -4966,10 +4976,243 @@ def download_xdelta_patch(patch_id):
         }), 500
 
 
+# =====================
+# 3D Viewer Endpoints
+# =====================
+
+@app.route('/api/viewer/start', methods=['POST'])
+def start_viewer():
+    """Start the 3D model viewer for a costume"""
+    global viewer_process, viewer_port
+
+    try:
+        data = request.json
+        character = data.get('character')
+        skin_id = data.get('skinId')
+
+        if not character or not skin_id:
+            return jsonify({'success': False, 'error': 'Missing character or skinId'}), 400
+
+        # Stop any existing viewer
+        if viewer_process is not None:
+            try:
+                viewer_process.terminate()
+                viewer_process.wait(timeout=2)
+            except:
+                viewer_process.kill()
+            viewer_process = None
+
+        # Find the costume in metadata
+        metadata_file = STORAGE_PATH / 'metadata.json'
+        if not metadata_file.exists():
+            return jsonify({'success': False, 'error': 'No costumes in storage'}), 404
+
+        with open(metadata_file, 'r') as f:
+            metadata = json.load(f)
+
+        # Find the costume
+        characters = metadata.get('characters', {})
+        if character not in characters:
+            return jsonify({'success': False, 'error': f'Character {character} not found'}), 404
+
+        skins = characters[character].get('skins', [])
+        costume = None
+        for skin in skins:
+            if skin.get('id') == skin_id:
+                costume = skin
+                break
+
+        if costume is None:
+            return jsonify({'success': False, 'error': f'Costume {skin_id} not found'}), 404
+
+        # Get the ZIP file path
+        zip_path = STORAGE_PATH / character / costume['filename']
+        if not zip_path.exists():
+            return jsonify({'success': False, 'error': f'Costume file not found: {zip_path}'}), 404
+
+        # Extract DAT file to temp location
+        temp_dir = Path(tempfile.mkdtemp(prefix='viewer_'))
+        dat_path = None
+
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            for name in zf.namelist():
+                if name.lower().endswith('.dat'):
+                    zf.extract(name, temp_dir)
+                    dat_path = temp_dir / name
+                    break
+
+        if dat_path is None or not dat_path.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return jsonify({'success': False, 'error': 'No DAT file found in costume'}), 404
+
+        # Check if HSDRawViewer exists
+        if not HSDRAW_EXE.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return jsonify({
+                'success': False,
+                'error': f'HSDRawViewer not found at {HSDRAW_EXE}. Please build it first.'
+            }), 500
+
+        # Find an available port
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('localhost', 0))
+        viewer_port = sock.getsockname()[1]
+        sock.close()
+
+        # Convert paths for Windows if running in WSL
+        def to_windows_path(path):
+            path_str = str(path)
+            if os.name != 'nt' and path_str.startswith('/mnt/'):
+                # Convert WSL path to Windows path
+                drive = path_str[5].upper()
+                return f"{drive}:{path_str[6:]}".replace('/', '\\')
+            return path_str
+
+        exe_path = to_windows_path(HSDRAW_EXE)
+        dat_windows_path = to_windows_path(dat_path)
+        logs_windows_path = to_windows_path(LOGS_PATH)
+
+        # Look for a scene file for this character
+        scene_path = None
+        csp_data_dir = PROCESSOR_DIR / "csp_data" / character
+
+        if csp_data_dir.exists():
+            # Try scene.yml first (most common)
+            if (csp_data_dir / "scene.yml").exists():
+                scene_path = csp_data_dir / "scene.yml"
+            else:
+                # Look for any .yml file (cspfinal.yml, CSP.yml, etc.)
+                yml_files = sorted(csp_data_dir.glob("*.yml"))
+                if yml_files:
+                    scene_path = yml_files[0]
+
+        scene_windows_path = None
+        if scene_path:
+            scene_windows_path = to_windows_path(scene_path)
+            logger.info(f"Found scene file: {scene_path}")
+
+        # Build command with logs path and optional scene file
+        cmd = [exe_path, '--stream', str(viewer_port), dat_windows_path, logs_windows_path]
+        if scene_windows_path:
+            cmd.append(scene_windows_path)
+
+        logger.info(f"Starting viewer: {' '.join(cmd)}")
+
+        # Start the viewer process
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        viewer_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=creation_flags
+        )
+
+        # Poll until server is ready (check HTTP health endpoint)
+        import urllib.request
+        max_wait = 15  # seconds
+        poll_interval = 0.5
+        server_ready = False
+
+        for _ in range(int(max_wait / poll_interval)):
+            time.sleep(poll_interval)
+
+            # Check if process died
+            if viewer_process is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Viewer was stopped during startup'
+                }), 500
+
+            if viewer_process.poll() is not None:
+                stdout, stderr = viewer_process.communicate()
+                viewer_process = None
+                return jsonify({
+                    'success': False,
+                    'error': f'Viewer failed to start: {stderr.decode() if stderr else stdout.decode()}'
+                }), 500
+
+            # Try to connect to health endpoint
+            try:
+                req = urllib.request.urlopen(f'http://localhost:{viewer_port}/', timeout=1)
+                if req.status == 200:
+                    server_ready = True
+                    break
+            except:
+                pass  # Server not ready yet
+
+        if not server_ready:
+            # Kill the process since it didn't start in time
+            if viewer_process:
+                viewer_process.kill()
+                viewer_process = None
+            return jsonify({
+                'success': False,
+                'error': 'Viewer failed to start within timeout'
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'port': viewer_port,
+            'wsUrl': f'ws://localhost:{viewer_port}/'
+        })
+
+    except Exception as e:
+        logger.error(f"Start viewer error: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/viewer/stop', methods=['POST'])
+def stop_viewer():
+    """Stop the 3D model viewer"""
+    global viewer_process, viewer_port
+
+    try:
+        if viewer_process is not None:
+            try:
+                viewer_process.terminate()
+                viewer_process.wait(timeout=2)
+            except:
+                viewer_process.kill()
+
+            viewer_process = None
+            viewer_port = None
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        logger.error(f"Stop viewer error: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/viewer/status', methods=['GET'])
+def viewer_status():
+    """Get the current viewer status"""
+    global viewer_process, viewer_port
+
+    running = viewer_process is not None and viewer_process.poll() is None
+
+    return jsonify({
+        'success': True,
+        'running': running,
+        'port': viewer_port if running else None,
+        'wsUrl': f'ws://localhost:{viewer_port}/' if running else None
+    })
+
+
 def cleanup_on_exit():
     """Cleanup function called on exit"""
-    global mex_manager
+    global mex_manager, viewer_process
     logger.info("Cleaning up MEX API Backend...")
+
+    # Stop viewer if running
+    if viewer_process is not None:
+        try:
+            viewer_process.terminate()
+            viewer_process.wait(timeout=2)
+        except:
+            viewer_process.kill()
+        viewer_process = None
 
     # Clean up any temporary files
     try:

@@ -1108,3 +1108,177 @@
 .iso-builder-modal .btn-secondary:active {
   transform: translateY(0) scale(0.98);
 }
+
+/* =====================
+   3D Model Viewer
+   ===================== */
+
+.model-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.model-viewer-container {
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  width: 90%;
+  max-width: 900px;
+  height: 80vh;
+  max-height: 700px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.model-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+
+.model-viewer-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+}
+
+.model-viewer-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: var(--space-2);
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.model-viewer-close:hover {
+  color: var(--color-text-primary);
+}
+
+.model-viewer-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  position: relative;
+  overflow: hidden;
+}
+
+.model-viewer-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.model-viewer-loading,
+.model-viewer-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.model-viewer-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-cyan);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.model-viewer-error {
+  color: var(--color-red);
+}
+
+.model-viewer-error button {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-cyan);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  cursor: pointer;
+  font-weight: var(--font-medium);
+}
+
+.model-viewer-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.status-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-red);
+}
+
+.status-indicator.connected::before {
+  background: var(--color-green);
+}
+
+.viewer-info {
+  color: var(--color-text-secondary);
+}
+
+.controls-hint {
+  color: var(--color-text-muted);
+}
+
+/* View 3D Button in Edit Modal */
+.btn-view3d {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  color: white;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-view3d:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.btn-view3d:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
