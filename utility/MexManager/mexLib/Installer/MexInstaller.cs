@@ -497,7 +497,25 @@ namespace mexLib.Installer
             // Inject Sheik CSPs from bundled vanilla assets (Sheik has no CSPs in vanilla ISO)
             MexFighter sheik = workspace.Project.Fighters[7]; // Sheik is internal ID 7
             string[] sheikCostumeCodes = { "PlSkNr", "PlSkRe", "PlSkBu", "PlSkGr", "PlSkWh" };
+
+            // Try production path first, then fall back to dev path (source tree)
             string vanillaSheikPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "utility", "assets", "vanilla", "Sheik");
+            if (!Directory.Exists(vanillaSheikPath))
+            {
+                // Dev fallback: walk up from bin/Debug/net6.0 to find utility/assets
+                // Need to strip trailing slash first, then walk up 6+ levels
+                string? devPath = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                for (int i = 0; i < 8 && devPath != null; i++)
+                {
+                    devPath = Path.GetDirectoryName(devPath);
+                    string candidate = Path.Combine(devPath ?? "", "utility", "assets", "vanilla", "Sheik");
+                    if (Directory.Exists(candidate))
+                    {
+                        vanillaSheikPath = candidate;
+                        break;
+                    }
+                }
+            }
 
             for (int j = 0; j < Math.Min(sheik.Costumes.Count, sheikCostumeCodes.Length); j++)
             {

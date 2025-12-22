@@ -297,7 +297,7 @@ def open_project():
         mex = get_mex_manager()
         info = mex.get_info()
 
-        logger.info(f"✓ Opened MEX project: {project_path}")
+        logger.info(f"[OK] Opened MEX project: {project_path}")
 
         return jsonify({
             'success': True,
@@ -391,7 +391,7 @@ def create_project():
                 'error': 'Project was created but .mexproj file not found'
             }), 500
 
-        logger.info(f"✓ Project created successfully: {created_project_path}")
+        logger.info(f"[OK] Project created successfully: {created_project_path}")
         logger.info(f"=== CREATE PROJECT COMPLETE ===")
 
         return jsonify({
@@ -532,7 +532,7 @@ def serve_storage(file_path):
         }
         mimetype = mimetype_map.get(ext, 'application/octet-stream')
 
-        logger.info(f"✓ Serving storage file: {full_path}")
+        logger.info(f"[OK] Serving storage file: {full_path}")
         return send_file(full_path, mimetype=mimetype)
     except Exception as e:
         logger.error(f"EXCEPTION serving storage file {file_path}: {e}", exc_info=True)
@@ -648,7 +648,7 @@ def serve_mex_assets(file_path):
         else:
             mimetype = 'application/octet-stream'
 
-        logger.info(f"✓ Serving file: {full_path}")
+        logger.info(f"[OK] Serving file: {full_path}")
         return send_file(full_path, mimetype=mimetype)
     except Exception as e:
         logger.error(f"EXCEPTION serving MEX asset {file_path}: {e}", exc_info=True)
@@ -1121,7 +1121,7 @@ def delete_storage_costume():
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Deleted costume {skin_id} for {character}")
+        logger.info(f"[OK] Deleted costume {skin_id} for {character}")
         logger.info(f"  Deleted files: {deleted_files}")
 
         return jsonify({
@@ -1190,7 +1190,7 @@ def rename_storage_costume():
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Renamed costume {skin_id} to '{new_name}'")
+        logger.info(f"[OK] Renamed costume {skin_id} to '{new_name}'")
 
         return jsonify({
             'success': True,
@@ -1290,7 +1290,7 @@ def update_costume_csp():
                 with open(metadata_file, 'w') as f:
                     json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Updated CSP for {character} - {skin_id}")
+        logger.info(f"[OK] Updated CSP for {character} - {skin_id}")
 
         return jsonify({
             'success': True,
@@ -1390,7 +1390,7 @@ def update_costume_stock():
                 with open(metadata_file, 'w') as f:
                     json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Updated stock icon for {character} - {skin_id}")
+        logger.info(f"[OK] Updated stock icon for {character} - {skin_id}")
 
         return jsonify({
             'success': True,
@@ -1500,7 +1500,7 @@ def retest_costume_slippi():
                 with open(metadata_file, 'w') as f:
                     json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Retested slippi for {character} - {skin_id}: {validation['slippi_safe']}")
+        logger.info(f"[OK] Retested slippi for {character} - {skin_id}: {validation['slippi_safe']}")
 
         return jsonify({
             'success': True,
@@ -1587,7 +1587,7 @@ def override_costume_slippi():
             json.dump(metadata, f, indent=2)
         logger.info("Metadata saved successfully")
 
-        logger.info(f"✓ Manually set slippi status for {character} - {skin_id}: {slippi_safe}")
+        logger.info(f"[OK] Manually set slippi status for {character} - {skin_id}: {slippi_safe}")
 
         return jsonify({
             'success': True,
@@ -1674,7 +1674,7 @@ def set_stage_slippi():
             json.dump(metadata, f, indent=2)
         logger.info("Metadata saved successfully")
 
-        logger.info(f"✓ Set slippi status for {stage_name} - {variant_id}: {slippi_safe}")
+        logger.info(f"[OK] Set slippi status for {stage_name} - {variant_id}: {slippi_safe}")
 
         return jsonify({
             'success': True,
@@ -2086,7 +2086,7 @@ def export_costume():
                 else:
                     logger.warning(f"Paired Nana ZIP not found: {nana_zip_path}")
 
-        logger.info(f"✓ Costume exported: {export_filename}")
+        logger.info(f"[OK] Costume exported: {export_filename}")
 
         return jsonify({
             'success': True,
@@ -2168,7 +2168,7 @@ def export_stage():
                 export_zip.write(screenshot_path, 'screenshot.png')
                 logger.info(f"  Added: screenshot.png")
 
-        logger.info(f"✓ Stage exported: {export_filename}")
+        logger.info(f"[OK] Stage exported: {export_filename}")
 
         return jsonify({
             'success': True,
@@ -2278,7 +2278,7 @@ def import_file():
             character_infos = detect_character_from_zip(temp_zip_path)
 
             if character_infos:
-                logger.info(f"✓ Detected {len(character_infos)} character costume(s)")
+                logger.info(f"[OK] Detected {len(character_infos)} character costume(s)")
 
                 # SLIPPI VALIDATION: Check if any costume needs slippi validation dialog
                 if slippi_action is None:
@@ -2358,7 +2358,7 @@ def import_file():
             stage_infos = detect_stage_from_zip(temp_zip_path)
 
             if stage_infos:
-                logger.info(f"✓ Detected {len(stage_infos)} stage mod(s)")
+                logger.info(f"[OK] Detected {len(stage_infos)} stage mod(s)")
 
                 # Import each detected stage
                 results = []
@@ -2459,7 +2459,7 @@ def fix_ice_climbers_pairing(character_infos: list, imported_skin_ids: dict):
         if updated:
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
-            logger.info("✓ Updated Ice Climbers pairing with actual skin IDs")
+            logger.info("[OK] Updated Ice Climbers pairing with actual skin IDs")
 
     except Exception as e:
         logger.error(f"Failed to fix Ice Climbers pairing: {e}", exc_info=True)
@@ -2804,7 +2804,7 @@ def import_character_costume(zip_path: str, char_info: dict, original_filename: 
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Saved character costume: {final_zip}")
+        logger.info(f"[OK] Saved character costume: {final_zip}")
 
         return {
             'success': True,
@@ -2872,14 +2872,14 @@ def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str, cu
                 stage_file_data = source_zf.read(stage_info['stage_file'])
                 stage_file_basename = os.path.basename(stage_info['stage_file'])
                 dest_zf.writestr(stage_file_basename, stage_file_data)
-                logger.info(f"✓ Added stage file to ZIP: {stage_file_basename}")
+                logger.info(f"[OK] Added stage file to ZIP: {stage_file_basename}")
 
                 # Add screenshot to ZIP if available
                 if stage_info['screenshot']:
                     screenshot_data = source_zf.read(stage_info['screenshot'])
                     screenshot_basename = os.path.basename(stage_info['screenshot'])
                     dest_zf.writestr(screenshot_basename, screenshot_data)
-                    logger.info(f"✓ Added screenshot to ZIP: {screenshot_basename}")
+                    logger.info(f"[OK] Added screenshot to ZIP: {screenshot_basename}")
 
         # Extract screenshot to storage folder for preview
         has_screenshot = False
@@ -2893,7 +2893,7 @@ def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str, cu
                 screenshot_path.write_bytes(screenshot_data)
 
                 has_screenshot = True
-                logger.info(f"✓ Saved screenshot preview: {screenshot_path}")
+                logger.info(f"[OK] Saved screenshot preview: {screenshot_path}")
 
         # Update metadata
         if stage_folder_name not in metadata['stages']:
@@ -2915,7 +2915,7 @@ def import_stage_mod(zip_path: str, stage_info: dict, original_filename: str, cu
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Saved stage mod: {final_zip}")
+        logger.info(f"[OK] Saved stage mod: {final_zip}")
 
         return {
             'success': True,
@@ -3410,7 +3410,7 @@ def das_import_variant():
 
             # Write directly to final location
             final_path.write_bytes(stage_data)
-            logger.info(f"✓ Extracted stage file to: {final_path}")
+            logger.info(f"[OK] Extracted stage file to: {final_path}")
             logger.info(f"  Using mod name: {final_name}")
 
             # No screenshot copying needed - frontend references storage folder directly
@@ -3624,7 +3624,7 @@ def delete_storage_stage():
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Deleted stage variant {variant_id} from {stage_folder}")
+        logger.info(f"[OK] Deleted stage variant {variant_id} from {stage_folder}")
         logger.info(f"  Deleted files: {deleted_files}")
 
         return jsonify({
@@ -3724,7 +3724,7 @@ def rename_storage_stage():
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Renamed stage variant {variant_id} to '{new_name}'")
+        logger.info(f"[OK] Renamed stage variant {variant_id} to '{new_name}'")
 
         return jsonify({
             'success': True,
@@ -3793,7 +3793,7 @@ def update_stage_screenshot():
                 with open(metadata_file, 'w') as f:
                     json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Updated screenshot for {stage_folder}/{variant_id}")
+        logger.info(f"[OK] Updated screenshot for {stage_folder}/{variant_id}")
         logger.info(f"  Saved to: {storage_screenshot_path}")
 
         return jsonify({
@@ -3860,7 +3860,7 @@ def reorder_costumes():
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Reordered {character} skins: moved index {from_index} to {to_index}")
+        logger.info(f"[OK] Reordered {character} skins: moved index {from_index} to {to_index}")
 
         return jsonify({
             'success': True,
@@ -3931,7 +3931,7 @@ def move_costume_to_top():
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
 
-            logger.info(f"✓ Moved {character} skin {skin_id} to top")
+            logger.info(f"[OK] Moved {character} skin {skin_id} to top")
 
         return jsonify({
             'success': True,
@@ -4002,7 +4002,7 @@ def move_costume_to_bottom():
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
 
-            logger.info(f"✓ Moved {character} skin {skin_id} to bottom")
+            logger.info(f"[OK] Moved {character} skin {skin_id} to bottom")
 
         return jsonify({
             'success': True,
@@ -4067,7 +4067,7 @@ def reorder_stages():
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"✓ Reordered {stage_folder} variants: moved index {from_index} to {to_index}")
+        logger.info(f"[OK] Reordered {stage_folder} variants: moved index {from_index} to {to_index}")
 
         return jsonify({
             'success': True,
@@ -4138,7 +4138,7 @@ def move_stage_to_top():
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
 
-            logger.info(f"✓ Moved {stage_folder} variant {variant_id} to top")
+            logger.info(f"[OK] Moved {stage_folder} variant {variant_id} to top")
 
         return jsonify({
             'success': True,
@@ -4209,7 +4209,7 @@ def move_stage_to_bottom():
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
 
-            logger.info(f"✓ Moved {stage_folder} variant {variant_id} to bottom")
+            logger.info(f"[OK] Moved {stage_folder} variant {variant_id} to bottom")
 
         return jsonify({
             'success': True,
@@ -4252,6 +4252,489 @@ def shutdown():
 
     shutdown_server()
     return jsonify({'success': True, 'message': 'Server shutting down...'})
+
+
+# ============= Vanilla ISO Verification =============
+
+VANILLA_ISO_MD5 = "0e63d4223b01d9aba596259dc155a174"
+
+
+@app.route('/api/mex/verify-iso', methods=['POST'])
+def verify_vanilla_iso():
+    """Verify that an ISO file is a valid vanilla Melee 1.02 ISO"""
+    try:
+        import hashlib
+
+        data = request.json or {}
+        iso_path = data.get('isoPath')
+
+        if not iso_path:
+            return jsonify({
+                'success': False,
+                'error': 'No ISO path provided'
+            }), 400
+
+        iso_file = Path(iso_path)
+        if not iso_file.exists():
+            return jsonify({
+                'success': False,
+                'error': 'ISO file not found'
+            }), 404
+
+        # Calculate MD5 hash
+        logger.info(f"Calculating MD5 for: {iso_path}")
+        md5_hash = hashlib.md5()
+
+        with open(iso_file, 'rb') as f:
+            # Read in chunks to handle large files
+            for chunk in iter(lambda: f.read(8192 * 1024), b''):  # 8MB chunks
+                md5_hash.update(chunk)
+
+        calculated_md5 = md5_hash.hexdigest()
+        is_valid = calculated_md5.lower() == VANILLA_ISO_MD5.lower()
+
+        logger.info(f"ISO MD5: {calculated_md5} (valid: {is_valid})")
+
+        return jsonify({
+            'success': True,
+            'valid': is_valid,
+            'md5': calculated_md5,
+            'expected': VANILLA_ISO_MD5
+        })
+    except Exception as e:
+        logger.error(f"Verify ISO error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============= XDelta Patches =============
+
+XDELTA_PATH = STORAGE_PATH / "xdelta"
+XDELTA_PATH.mkdir(exist_ok=True)
+
+
+def load_xdelta_metadata():
+    """Load xdelta metadata from metadata.json"""
+    metadata_file = STORAGE_PATH / 'metadata.json'
+    if not metadata_file.exists():
+        return []
+
+    with open(metadata_file, 'r') as f:
+        metadata = json.load(f)
+
+    return metadata.get('xdelta', [])
+
+
+def save_xdelta_metadata(xdelta_list):
+    """Save xdelta metadata to metadata.json"""
+    metadata_file = STORAGE_PATH / 'metadata.json'
+
+    if metadata_file.exists():
+        with open(metadata_file, 'r') as f:
+            metadata = json.load(f)
+    else:
+        metadata = {'version': '1.0', 'characters': {}, 'stages': {}}
+
+    metadata['xdelta'] = xdelta_list
+
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+
+@app.route('/api/mex/xdelta/list', methods=['GET'])
+def list_xdelta_patches():
+    """List all xdelta patches in storage"""
+    try:
+        patches = load_xdelta_metadata()
+
+        # Add image URLs
+        for patch in patches:
+            patch_id = patch.get('id')
+            if patch_id:
+                image_path = XDELTA_PATH / f"{patch_id}.png"
+                if image_path.exists():
+                    patch['imageUrl'] = f"/storage/xdelta/{patch_id}.png"
+                else:
+                    patch['imageUrl'] = None
+
+        return jsonify({
+            'success': True,
+            'patches': patches
+        })
+    except Exception as e:
+        logger.error(f"List xdelta patches error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/xdelta/import', methods=['POST'])
+def import_xdelta_patch():
+    """Import a new xdelta patch"""
+    try:
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No xdelta file uploaded'
+            }), 400
+
+        file = request.files['file']
+        name = request.form.get('name', 'Unnamed Patch')
+        description = request.form.get('description', '')
+
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+
+        # Validate file extension
+        if not file.filename.lower().endswith('.xdelta'):
+            return jsonify({
+                'success': False,
+                'error': 'File must be an .xdelta file'
+            }), 400
+
+        # Generate unique ID
+        import uuid
+        patch_id = str(uuid.uuid4())[:8]
+
+        # Save xdelta file
+        xdelta_filename = f"{patch_id}.xdelta"
+        xdelta_path = XDELTA_PATH / xdelta_filename
+        file.save(str(xdelta_path))
+
+        # Save image if provided
+        if 'image' in request.files:
+            image_file = request.files['image']
+            if image_file.filename:
+                image_path = XDELTA_PATH / f"{patch_id}.png"
+                image_file.save(str(image_path))
+
+        # Add to metadata
+        patches = load_xdelta_metadata()
+        patches.append({
+            'id': patch_id,
+            'name': name,
+            'description': description,
+            'filename': file.filename,
+            'created': datetime.now().isoformat()
+        })
+        save_xdelta_metadata(patches)
+
+        logger.info(f"[OK] Imported xdelta patch: {name} ({patch_id})")
+
+        return jsonify({
+            'success': True,
+            'patch': {
+                'id': patch_id,
+                'name': name,
+                'description': description
+            }
+        })
+    except Exception as e:
+        logger.error(f"Import xdelta patch error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/xdelta/update/<patch_id>', methods=['POST'])
+def update_xdelta_patch(patch_id):
+    """Update an xdelta patch's metadata"""
+    try:
+        data = request.json or {}
+        name = data.get('name')
+        description = data.get('description')
+
+        patches = load_xdelta_metadata()
+        patch = next((p for p in patches if p['id'] == patch_id), None)
+
+        if not patch:
+            return jsonify({
+                'success': False,
+                'error': 'Patch not found'
+            }), 404
+
+        if name is not None:
+            patch['name'] = name
+        if description is not None:
+            patch['description'] = description
+
+        save_xdelta_metadata(patches)
+
+        return jsonify({
+            'success': True,
+            'patch': patch
+        })
+    except Exception as e:
+        logger.error(f"Update xdelta patch error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/xdelta/update-image/<patch_id>', methods=['POST'])
+def update_xdelta_image(patch_id):
+    """Update an xdelta patch's image"""
+    try:
+        if 'image' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No image file uploaded'
+            }), 400
+
+        image_file = request.files['image']
+        if image_file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+
+        # Verify patch exists
+        patches = load_xdelta_metadata()
+        patch = next((p for p in patches if p['id'] == patch_id), None)
+
+        if not patch:
+            return jsonify({
+                'success': False,
+                'error': 'Patch not found'
+            }), 404
+
+        # Save image
+        image_path = XDELTA_PATH / f"{patch_id}.png"
+        image_file.save(str(image_path))
+
+        return jsonify({
+            'success': True,
+            'imageUrl': f"/storage/xdelta/{patch_id}.png"
+        })
+    except Exception as e:
+        logger.error(f"Update xdelta image error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/xdelta/delete/<patch_id>', methods=['POST'])
+def delete_xdelta_patch(patch_id):
+    """Delete an xdelta patch"""
+    try:
+        # Remove from metadata
+        patches = load_xdelta_metadata()
+        patches = [p for p in patches if p['id'] != patch_id]
+        save_xdelta_metadata(patches)
+
+        # Delete files
+        xdelta_path = XDELTA_PATH / f"{patch_id}.xdelta"
+        image_path = XDELTA_PATH / f"{patch_id}.png"
+
+        if xdelta_path.exists():
+            os.remove(xdelta_path)
+        if image_path.exists():
+            os.remove(image_path)
+
+        logger.info(f"[OK] Deleted xdelta patch: {patch_id}")
+
+        return jsonify({
+            'success': True
+        })
+    except Exception as e:
+        logger.error(f"Delete xdelta patch error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def run_xdelta_build(patch_id, patch_name, vanilla_iso_path, xdelta_path, output_path, expected_size):
+    """Background thread function to run xdelta and emit progress"""
+    try:
+        # Find xdelta executable
+        if os.name == 'nt':
+            if getattr(sys, 'frozen', False):
+                xdelta_exe = RESOURCES_DIR / "utility" / "xdelta" / "xdelta3.exe"
+            else:
+                xdelta_exe = PROJECT_ROOT / "utility" / "xdelta" / "xdelta3.exe"
+            if not xdelta_exe.exists():
+                xdelta_exe = "xdelta3"
+        else:
+            xdelta_exe = "xdelta3"
+
+        cmd = [
+            str(xdelta_exe),
+            '-d',  # Decode/decompress
+            '-s', str(vanilla_iso_path),
+            str(xdelta_path),
+            str(output_path)
+        ]
+
+        # Hide CMD window on Windows
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+
+        # Start the process
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=creation_flags
+        )
+
+        # Monitor progress by checking output file size
+        last_progress = 0
+        while process.poll() is None:
+            time.sleep(0.3)  # Check every 300ms
+            try:
+                if output_path.exists():
+                    current_size = output_path.stat().st_size
+                    progress = min(int((current_size / expected_size) * 100), 99)
+                    if progress != last_progress:
+                        socketio.emit('xdelta_progress', {
+                            'patch_id': patch_id,
+                            'percentage': progress,
+                            'message': f'Patching... {progress}%'
+                        })
+                        last_progress = progress
+            except:
+                pass
+
+        # Process finished - check result
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0:
+            error_msg = stderr.decode() if stderr else stdout.decode() if stdout else 'Unknown xdelta error'
+            logger.error(f"xdelta3 failed: {error_msg}")
+            socketio.emit('xdelta_error', {
+                'patch_id': patch_id,
+                'error': f'Failed to apply patch: {error_msg}'
+            })
+        else:
+            logger.info(f"[OK] Successfully built ISO: {output_path.name}")
+            socketio.emit('xdelta_complete', {
+                'patch_id': patch_id,
+                'filename': output_path.name,
+                'path': str(output_path)
+            })
+
+    except Exception as e:
+        logger.error(f"xdelta build thread error: {str(e)}", exc_info=True)
+        socketio.emit('xdelta_error', {
+            'patch_id': patch_id,
+            'error': str(e)
+        })
+
+
+@app.route('/api/mex/xdelta/build/<patch_id>', methods=['POST'])
+def build_xdelta_iso(patch_id):
+    """Build an ISO from an xdelta patch using the vanilla ISO"""
+    try:
+        data = request.json or {}
+        vanilla_iso_path = data.get('vanillaIsoPath')
+
+        if not vanilla_iso_path:
+            return jsonify({
+                'success': False,
+                'error': 'No vanilla ISO path provided. Please set it in Settings.'
+            }), 400
+
+        vanilla_iso = Path(vanilla_iso_path)
+        if not vanilla_iso.exists():
+            return jsonify({
+                'success': False,
+                'error': f'Vanilla ISO not found: {vanilla_iso_path}'
+            }), 404
+
+        # Get expected output size from vanilla ISO
+        expected_size = vanilla_iso.stat().st_size
+
+        # Get patch info
+        patches = load_xdelta_metadata()
+        patch = next((p for p in patches if p['id'] == patch_id), None)
+
+        if not patch:
+            return jsonify({
+                'success': False,
+                'error': 'Patch not found'
+            }), 404
+
+        xdelta_path = XDELTA_PATH / f"{patch_id}.xdelta"
+        if not xdelta_path.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Xdelta file not found'
+            }), 404
+
+        # Create output filename
+        safe_name = re.sub(r'[^\w\-_]', '_', patch['name'])
+        output_filename = f"{safe_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.iso"
+        output_path = OUTPUT_PATH / output_filename
+
+        logger.info(f"Building ISO from xdelta patch: {patch['name']}")
+        logger.info(f"  Vanilla ISO: {vanilla_iso_path} ({expected_size} bytes)")
+        logger.info(f"  Patch: {xdelta_path}")
+        logger.info(f"  Output: {output_path}")
+
+        # Run in background thread
+        thread = threading.Thread(
+            target=run_xdelta_build,
+            args=(patch_id, patch['name'], vanilla_iso_path, xdelta_path, output_path, expected_size)
+        )
+        thread.start()
+
+        return jsonify({
+            'success': True,
+            'message': 'Build started',
+            'filename': output_filename
+        })
+    except Exception as e:
+        logger.error(f"Build xdelta ISO error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/mex/xdelta/download/<filename>', methods=['GET'])
+def download_xdelta_iso(filename):
+    """Download a built xdelta ISO"""
+    try:
+        file_path = OUTPUT_PATH / filename
+
+        if not file_path.exists():
+            return jsonify({
+                'success': False,
+                'error': 'ISO file not found'
+            }), 404
+
+        # Delete after download
+        @after_this_request
+        def cleanup(response):
+            try:
+                os.remove(file_path)
+                logger.info(f"Deleted ISO file after download: {filename}")
+            except Exception as error:
+                logger.error(f"Error deleting ISO file {filename}: {str(error)}")
+            return response
+
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/octet-stream'
+        )
+    except Exception as e:
+        logger.error(f"Download xdelta ISO error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 def cleanup_on_exit():

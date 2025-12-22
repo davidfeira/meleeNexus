@@ -26,6 +26,7 @@ const MexPanel = () => {
   const [openingProject, setOpeningProject] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [createProjectStatus, setCreateProjectStatus] = useState('');
+  const [createProjectProgress, setCreateProjectProgress] = useState(0);
   const [importing, setImporting] = useState(false);
   const [importingCostume, setImportingCostume] = useState(null);
   const [removing, setRemoving] = useState(false);
@@ -1147,12 +1148,19 @@ const MexPanel = () => {
       return;
     }
 
-    // Step 1: Select vanilla ISO (before showing loading)
-    const isoPath = await window.electron.openIsoDialog();
+    // Step 1: Check if we already have a saved vanilla ISO path
+    let isoPath = localStorage.getItem('vanilla_iso_path');
 
     if (!isoPath) {
-      // User canceled
-      return;
+      // No saved path, ask user to select one
+      isoPath = await window.electron.openIsoDialog();
+
+      if (!isoPath) {
+        // User canceled
+        return;
+      }
+    } else {
+      console.log('Using saved vanilla ISO path:', isoPath);
     }
 
     console.log('Selected ISO:', isoPath);
@@ -1169,12 +1177,15 @@ const MexPanel = () => {
 
     // Now show loading overlay since we have all user input
     setCreatingProject(true);
+    setCreateProjectProgress(0);
     setCreateProjectStatus('Creating project...');
 
     try {
       // Step 3: Use default project name
       const projectName = 'MexProject';
       console.log('Project name:', projectName);
+
+      setCreateProjectProgress(10);
 
       // Step 4: Call backend to create project
       const response = await fetch(`${API_URL}/project/create`, {
@@ -1191,9 +1202,15 @@ const MexPanel = () => {
 
       if (data.success) {
         console.log('✓ Project created:', data.projectPath);
+        setCreateProjectProgress(40);
+
+        // Save the vanilla ISO path for future use (xdelta patching, etc.)
+        localStorage.setItem('vanilla_iso_path', isoPath);
+        console.log('✓ Saved vanilla ISO path:', isoPath);
 
         // Step 5: Auto-open the newly created project
         setCreateProjectStatus('Opening project...');
+        setCreateProjectProgress(50);
         const openResponse = await fetch(`${API_URL}/project/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1260,7 +1277,7 @@ const MexPanel = () => {
     return (
       <div className="mex-panel">
         <div className="project-selection">
-          <h1>MEX Manager</h1>
+          <h1>Install</h1>
           <p className="subtitle">Select a project to get started</p>
 
           {/* Recent Projects */}
@@ -1322,6 +1339,20 @@ const MexPanel = () => {
             </div>
           </div>
         </div>
+
+        {/* Project Creation Loading Overlay */}
+        {creatingProject && (
+          <div className="import-overlay">
+            <div className="import-modal">
+              <div className="import-spinner"></div>
+              <h3>Creating Project</h3>
+              <div className="import-progress">
+                <div className="import-progress-bar indeterminate" />
+              </div>
+              <p>{createProjectStatus}</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

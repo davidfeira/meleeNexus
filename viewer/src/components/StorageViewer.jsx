@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { io } from 'socket.io-client'
 import './StorageViewer.css'
+import './IsoBuilder.css'
 import { DEFAULT_CHARACTERS } from '../defaultCharacters'
 
 const API_URL = 'http://127.0.0.1:5000/api/mex'
@@ -14,13 +16,52 @@ const DAS_STAGES = [
   { code: 'GrNLa', name: 'Final Destination', folder: 'final_destination', vanillaImage: `${BACKEND_URL}/vanilla/stages/final destination.png` }
 ]
 
+// Skeleton loading components
+const SkeletonCard = () => (
+  <div className="character-card skeleton-card">
+    <div className="character-image-container">
+      <div className="skeleton skeleton-image"></div>
+    </div>
+    <div className="skeleton skeleton-text" style={{ width: '70%', margin: '0.5rem auto' }}></div>
+    <div className="skeleton skeleton-text" style={{ width: '40%', margin: '0 auto', height: '12px' }}></div>
+  </div>
+)
+
+const SkeletonSkinCard = () => (
+  <div className="skin-card skeleton-card">
+    <div className="skin-image-container">
+      <div className="skeleton skeleton-image"></div>
+    </div>
+    <div className="skeleton skeleton-text" style={{ width: '60%', margin: '0.5rem auto' }}></div>
+  </div>
+)
+
 export default function StorageViewer({ metadata, onRefresh }) {
-  const [mode, setMode] = useState('characters') // 'characters' or 'stages'
+  const [mode, setMode] = useState('characters') // 'characters', 'stages', or 'patches'
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [selectedStage, setSelectedStage] = useState(null)
   const [stageVariants, setStageVariants] = useState({})
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+
+  // XDelta patches state
+  const [xdeltaPatches, setXdeltaPatches] = useState([])
+  const [showXdeltaImportModal, setShowXdeltaImportModal] = useState(false)
+  const [xdeltaImportData, setXdeltaImportData] = useState({ name: '', description: '', file: null, image: null })
+  const [importingXdelta, setImportingXdelta] = useState(false)
+  const [showXdeltaEditModal, setShowXdeltaEditModal] = useState(false)
+  const [editingXdelta, setEditingXdelta] = useState(null)
+
+  // XDelta build modal state
+  const [showXdeltaBuildModal, setShowXdeltaBuildModal] = useState(false)
+  const [xdeltaBuildState, setXdeltaBuildState] = useState('idle') // 'idle', 'building', 'complete', 'error'
+  const [xdeltaBuildPatch, setXdeltaBuildPatch] = useState(null)
+  const [xdeltaBuildFilename, setXdeltaBuildFilename] = useState(null)
+  const [xdeltaBuildError, setXdeltaBuildError] = useState(null)
+  const [xdeltaBuildProgress, setXdeltaBuildProgress] = useState(0)
+  const [xdeltaBuildMessage, setXdeltaBuildMessage] = useState('')
+  const socketRef = useRef(null)
 
   // Slippi dialog state
   const [showSlippiDialog, setShowSlippiDialog] = useState(false)
@@ -57,6 +98,255 @@ export default function StorageViewer({ metadata, onRefresh }) {
       fetchStageVariants()
     }
   }, [mode, metadata])
+
+  // Fetch xdelta patches when in patches mode
+  useEffect(() => {
+    if (mode === 'patches') {
+      fetchXdeltaPatches()
+    }
+  }, [mode])
+
+  // WebSocket connection for xdelta build progress
+  useEffect(() => {
+    const socket = io(BACKEND_URL)
+    socketRef.current = socket
+
+    socket.on('connect', () => {
+      console.log('Connected to WebSocket for xdelta progress')
+    })
+
+    socket.on('xdelta_progress', (data) => {
+      if (xdeltaBuildPatch && data.patch_id === xdeltaBuildPatch.id) {
+        setXdeltaBuildProgress(data.percentage)
+        setXdeltaBuildMessage(data.message)
+      }
+    })
+
+    socket.on('xdelta_complete', (data) => {
+      if (xdeltaBuildPatch && data.patch_id === xdeltaBuildPatch.id) {
+        setXdeltaBuildProgress(100)
+        setXdeltaBuildFilename(data.filename)
+        setXdeltaBuildState('complete')
+      }
+    })
+
+    socket.on('xdelta_error', (data) => {
+      if (xdeltaBuildPatch && data.patch_id === xdeltaBuildPatch.id) {
+        setXdeltaBuildError(data.error)
+        setXdeltaBuildState('error')
+      }
+    })
+
+    return () => {
+      socket.disconnect()
+    }
+  }, [xdeltaBuildPatch])
+
+  const fetchXdeltaPatches = async () => {
+    try {
+      const response = await fetch(`${API_URL}/xdelta/list`)
+      if (!response.ok) {
+        console.error('Failed to fetch xdelta patches: Server returned', response.status)
+        return
+      }
+      const text = await response.text()
+      if (!text || text.startsWith('<!')) {
+        console.error('Failed to fetch xdelta patches: Server returned HTML instead of JSON')
+        return
+      }
+      const data = JSON.parse(text)
+      if (data.success) {
+        setXdeltaPatches(data.patches)
+      }
+    } catch (err) {
+      console.error('Failed to fetch xdelta patches:', err)
+    }
+  }
+
+  const handleImportXdelta = async () => {
+    if (!xdeltaImportData.file) {
+      alert('Please select an xdelta file')
+      return
+    }
+
+    setImportingXdelta(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', xdeltaImportData.file)
+      formData.append('name', xdeltaImportData.name || xdeltaImportData.file.name.replace('.xdelta', ''))
+      formData.append('description', xdeltaImportData.description)
+      if (xdeltaImportData.image) {
+        formData.append('image', xdeltaImportData.image)
+      }
+
+      const response = await fetch(`${API_URL}/xdelta/import`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setShowXdeltaImportModal(false)
+        setXdeltaImportData({ name: '', description: '', file: null, image: null })
+        await fetchXdeltaPatches()
+      } else {
+        alert(`Import failed: ${data.error}`)
+      }
+    } catch (err) {
+      alert(`Import error: ${err.message}`)
+    } finally {
+      setImportingXdelta(false)
+    }
+  }
+
+  const handleBuildXdeltaIso = async (patch) => {
+    const vanillaIsoPath = localStorage.getItem('vanilla_iso_path')
+
+    if (!vanillaIsoPath) {
+      alert('No vanilla ISO path set. Please set it in Settings first.')
+      return
+    }
+
+    // Open modal and set building state
+    setXdeltaBuildPatch(patch)
+    setXdeltaBuildState('building')
+    setXdeltaBuildFilename(null)
+    setXdeltaBuildError(null)
+    setXdeltaBuildProgress(0)
+    setXdeltaBuildMessage('Starting...')
+    setShowXdeltaBuildModal(true)
+
+    try {
+      const response = await fetch(`${API_URL}/xdelta/build/${patch.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vanillaIsoPath })
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        setXdeltaBuildError(data.error)
+        setXdeltaBuildState('error')
+      }
+      // If success, we wait for WebSocket events for progress/complete
+    } catch (err) {
+      setXdeltaBuildError(err.message)
+      setXdeltaBuildState('error')
+    }
+  }
+
+  const handleDownloadXdeltaIso = () => {
+    if (!xdeltaBuildFilename) return
+
+    const link = document.createElement('a')
+    link.href = `${API_URL}/xdelta/download/${xdeltaBuildFilename}`
+    link.download = xdeltaBuildFilename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const closeXdeltaBuildModal = () => {
+    setShowXdeltaBuildModal(false)
+    setXdeltaBuildState('idle')
+    setXdeltaBuildPatch(null)
+    setXdeltaBuildFilename(null)
+    setXdeltaBuildError(null)
+    setXdeltaBuildProgress(0)
+    setXdeltaBuildMessage('')
+  }
+
+  const handleDeleteXdelta = async (patchId) => {
+    if (!confirm('Are you sure you want to delete this patch?')) return
+
+    try {
+      const response = await fetch(`${API_URL}/xdelta/delete/${patchId}`, {
+        method: 'POST'
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        await fetchXdeltaPatches()
+      } else {
+        alert(`Delete failed: ${data.error}`)
+      }
+    } catch (err) {
+      alert(`Delete error: ${err.message}`)
+    }
+  }
+
+  const handleEditXdelta = (patch) => {
+    setEditingXdelta({ ...patch })
+    setShowXdeltaEditModal(true)
+  }
+
+  const handleSaveXdeltaEdit = async () => {
+    if (!editingXdelta) return
+
+    try {
+      const response = await fetch(`${API_URL}/xdelta/update/${editingXdelta.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingXdelta.name,
+          description: editingXdelta.description
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setShowXdeltaEditModal(false)
+        setEditingXdelta(null)
+        await fetchXdeltaPatches()
+      } else {
+        alert(`Save failed: ${data.error}`)
+      }
+    } catch (err) {
+      alert(`Save error: ${err.message}`)
+    }
+  }
+
+  const handleUpdateXdeltaImage = async (e) => {
+    if (!editingXdelta) return
+
+    const file = e.target.files[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('image', file)
+
+    try {
+      const response = await fetch(`${API_URL}/xdelta/update-image/${editingXdelta.id}`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setEditingXdelta({ ...editingXdelta, imageUrl: data.imageUrl })
+        await fetchXdeltaPatches()
+      } else {
+        alert(`Image update failed: ${data.error}`)
+      }
+    } catch (err) {
+      alert(`Image update error: ${err.message}`)
+    }
+  }
+
+  // Track loading state based on metadata
+  useEffect(() => {
+    if (metadata) {
+      // Small delay for smooth transition
+      const timer = setTimeout(() => setIsLoading(false), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [metadata])
 
   const fetchStageVariants = async () => {
     try {
@@ -1498,26 +1788,6 @@ export default function StorageViewer({ metadata, onRefresh }) {
   // Character or Stage selection grid
   return (
     <div className="storage-viewer">
-      <div className="storage-header">
-        <div className="storage-actions">
-          <label className="intake-import-btn" style={{ cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1 }}>
-            {importing ? 'Importing...' : 'Import File'}
-            <input
-              type="file"
-              accept=".zip"
-              onChange={handleFileImport}
-              disabled={importing}
-              style={{ display: 'none' }}
-            />
-          </label>
-          {importMessage && (
-            <div className={`import-message ${importMessage.includes('failed') || importMessage.includes('Error') || importMessage.includes('✗') ? 'error' : 'success'}`}>
-              {importMessage}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Mode Switcher */}
       <div className="mode-switcher">
         <button
@@ -1538,11 +1808,47 @@ export default function StorageViewer({ metadata, onRefresh }) {
         >
           Stages
         </button>
+        <button
+          className={`mode-btn ${mode === 'patches' ? 'active' : ''}`}
+          onClick={() => {
+            setMode('patches')
+            setSelectedCharacter(null)
+            setSelectedStage(null)
+          }}
+        >
+          Patches
+        </button>
       </div>
+
+      {/* Import File button - only for characters and stages */}
+      {(mode === 'characters' || mode === 'stages') && (
+        <div className="import-file-container">
+          <label className="intake-import-btn" style={{ cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1 }}>
+            {importing ? 'Importing...' : 'Import File'}
+            <input
+              type="file"
+              accept=".zip,.7z"
+              onChange={handleFileImport}
+              disabled={importing}
+              style={{ display: 'none' }}
+            />
+          </label>
+          {importMessage && (
+            <div className={`import-message ${importMessage.includes('failed') || importMessage.includes('Error') || importMessage.includes('✗') ? 'error' : 'success'}`}>
+              {importMessage}
+            </div>
+          )}
+        </div>
+      )}
 
       {mode === 'characters' ? (
         <div className="characters-grid">
-        {characters.map((characterName) => {
+        {isLoading ? (
+          // Skeleton loading for characters
+          Array.from({ length: 12 }).map((_, idx) => (
+            <SkeletonCard key={`skeleton-${idx}`} />
+          ))
+        ) : characters.map((characterName) => {
           const charData = allCharacters[characterName]
           // Only count visible skins (exclude hidden Ice Climbers Nana entries)
           const visibleSkins = charData?.skins?.filter(skin => skin.visible !== false) || []
@@ -1585,10 +1891,15 @@ export default function StorageViewer({ metadata, onRefresh }) {
           )
         })}
       </div>
-      ) : (
+      ) : mode === 'stages' ? (
         // Stages grid
         <div className="stages-grid">
-          {DAS_STAGES.map((stage) => {
+          {isLoading ? (
+            // Skeleton loading for stages
+            Array.from({ length: 6 }).map((_, idx) => (
+              <SkeletonCard key={`skeleton-stage-${idx}`} />
+            ))
+          ) : DAS_STAGES.map((stage) => {
             const variants = stageVariants[stage.code] || []
             const variantCount = variants.length
 
@@ -1622,10 +1933,293 @@ export default function StorageViewer({ metadata, onRefresh }) {
             )
           })}
         </div>
+      ) : (
+        // Patches list
+        <div className="patches-section">
+          <div className="patches-header">
+            <button
+              className="intake-import-btn"
+              onClick={() => setShowXdeltaImportModal(true)}
+            >
+              Import Patch
+            </button>
+          </div>
+
+          {xdeltaPatches.length === 0 ? (
+            <div className="no-patches-message">
+              <p>No xdelta patches yet. Import a patch to get started!</p>
+            </div>
+          ) : (
+            <div className="patches-list">
+              {xdeltaPatches.map((patch) => (
+                <div key={patch.id} className="patch-row">
+                  <div className="patch-row-image">
+                    {patch.imageUrl ? (
+                      <img
+                        src={`${BACKEND_URL}${patch.imageUrl}`}
+                        alt={patch.name}
+                        onError={(e) => {
+                          e.target.style.display = 'none'
+                          e.target.nextSibling.style.display = 'flex'
+                        }}
+                      />
+                    ) : null}
+                    <div className="patch-row-placeholder" style={{ display: patch.imageUrl ? 'none' : 'flex' }}>
+                      {patch.name[0]}
+                    </div>
+                  </div>
+
+                  <div className="patch-row-info">
+                    <h4 className="patch-row-name">{patch.name}</h4>
+                    {patch.description && (
+                      <p className="patch-row-description">{patch.description}</p>
+                    )}
+                  </div>
+
+                  <div className="patch-row-actions">
+                    <button
+                      className="btn-edit-small"
+                      onClick={() => handleEditXdelta(patch)}
+                      title="Edit"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      className="btn-build-iso"
+                      onClick={() => handleBuildXdeltaIso(patch)}
+                    >
+                      Build ISO
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* XDelta Import Modal */}
+          {showXdeltaImportModal && (
+            <div className="edit-modal-overlay" onClick={() => setShowXdeltaImportModal(false)}>
+              <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+                <h2>Import XDelta Patch</h2>
+
+                <div className="edit-field">
+                  <label>XDelta File:</label>
+                  <input
+                    type="file"
+                    accept=".xdelta"
+                    onChange={(e) => setXdeltaImportData({
+                      ...xdeltaImportData,
+                      file: e.target.files[0],
+                      name: xdeltaImportData.name || (e.target.files[0]?.name.replace('.xdelta', '') || '')
+                    })}
+                  />
+                </div>
+
+                <div className="edit-field">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    value={xdeltaImportData.name}
+                    onChange={(e) => setXdeltaImportData({ ...xdeltaImportData, name: e.target.value })}
+                    placeholder="Patch name..."
+                  />
+                </div>
+
+                <div className="edit-field">
+                  <label>Description (optional):</label>
+                  <textarea
+                    value={xdeltaImportData.description}
+                    onChange={(e) => setXdeltaImportData({ ...xdeltaImportData, description: e.target.value })}
+                    placeholder="Description..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="edit-field">
+                  <label>Image (optional):</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setXdeltaImportData({ ...xdeltaImportData, image: e.target.files[0] })}
+                  />
+                </div>
+
+                <div className="edit-buttons">
+                  <button
+                    className="btn-save"
+                    onClick={handleImportXdelta}
+                    disabled={importingXdelta || !xdeltaImportData.file}
+                  >
+                    {importingXdelta ? 'Importing...' : 'Import'}
+                  </button>
+                  <button
+                    className="btn-cancel"
+                    onClick={() => {
+                      setShowXdeltaImportModal(false)
+                      setXdeltaImportData({ name: '', description: '', file: null, image: null })
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* XDelta Edit Modal */}
+          {showXdeltaEditModal && editingXdelta && (
+            <div className="edit-modal-overlay" onClick={() => {
+              setShowXdeltaEditModal(false)
+              setEditingXdelta(null)
+            }}>
+              <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+                <h2>Edit Patch</h2>
+
+                <div className="edit-preview">
+                  {editingXdelta.imageUrl ? (
+                    <img
+                      src={`${BACKEND_URL}${editingXdelta.imageUrl}?t=${Date.now()}`}
+                      alt={editingXdelta.name}
+                    />
+                  ) : (
+                    <div className="edit-placeholder">
+                      <span>{editingXdelta.name[0]}</span>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUpdateXdeltaImage}
+                    style={{ display: 'none' }}
+                    id="xdelta-image-input"
+                  />
+                  <button
+                    className="btn-edit-screenshot"
+                    onClick={() => document.getElementById('xdelta-image-input').click()}
+                    title="Replace image"
+                  >
+                    ✎
+                  </button>
+                </div>
+
+                <div className="edit-field">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    value={editingXdelta.name}
+                    onChange={(e) => setEditingXdelta({ ...editingXdelta, name: e.target.value })}
+                  />
+                </div>
+
+                <div className="edit-field">
+                  <label>Description:</label>
+                  <textarea
+                    value={editingXdelta.description || ''}
+                    onChange={(e) => setEditingXdelta({ ...editingXdelta, description: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="edit-buttons">
+                  <button className="btn-save" onClick={handleSaveXdeltaEdit}>
+                    Save
+                  </button>
+                  <button
+                    className="btn-cancel"
+                    onClick={() => {
+                      setShowXdeltaEditModal(false)
+                      setEditingXdelta(null)
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-delete-modal"
+                    onClick={() => {
+                      handleDeleteXdelta(editingXdelta.id)
+                      setShowXdeltaEditModal(false)
+                      setEditingXdelta(null)
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {renderEditModal()}
       {renderSlippiDialog()}
+
+      {/* XDelta Build Modal */}
+      {showXdeltaBuildModal && (
+        <div className="iso-builder-overlay">
+          <div className="iso-builder-modal">
+            <div className="modal-header">
+              <h2>Build ISO</h2>
+              {xdeltaBuildState !== 'building' && (
+                <button className="close-btn" onClick={closeXdeltaBuildModal}>×</button>
+              )}
+            </div>
+
+            <div className="modal-body">
+              {xdeltaBuildState === 'building' && (
+                <div className="export-progress">
+                  <div className="progress-header">
+                    <h3>Building ISO...</h3>
+                    <span className="progress-percentage">{xdeltaBuildProgress}%</span>
+                  </div>
+
+                  <div className="progress-bar">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${xdeltaBuildProgress}%` }}
+                    ></div>
+                  </div>
+
+                  <p className="progress-message">
+                    {xdeltaBuildMessage || `Applying patch: ${xdeltaBuildPatch?.name}`}
+                  </p>
+
+                  <div className="export-spinner">
+                    <div className="spinner"></div>
+                  </div>
+                </div>
+              )}
+
+              {xdeltaBuildState === 'complete' && (
+                <div className="export-complete">
+                  <div className="success-icon">✓</div>
+                  <h3>Build Complete!</h3>
+                  <p>Your patched ISO is ready to download.</p>
+                  <div className="complete-actions">
+                    <button className="btn-download" onClick={handleDownloadXdeltaIso}>
+                      Download {xdeltaBuildFilename}
+                    </button>
+                    <button className="btn-secondary" onClick={closeXdeltaBuildModal}>
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {xdeltaBuildState === 'error' && (
+                <div className="export-error">
+                  <div className="error-icon">✕</div>
+                  <h3>Build Failed</h3>
+                  <p className="error-message">{xdeltaBuildError}</p>
+                  <button className="btn-secondary" onClick={closeXdeltaBuildModal}>
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+

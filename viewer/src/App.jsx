@@ -207,7 +207,10 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>SSBM Nucleus</h1>
+        <div className="header-brand">
+          <img src="/nucleuslogo.png" alt="SSBM Nucleus" className="header-logo" />
+          <h1>SSBM Nucleus</h1>
+        </div>
         <nav className="app-tabs">
           <button
             className={`tab ${activeTab === 'storage' ? 'active' : ''}`}
@@ -219,7 +222,7 @@ function App() {
             className={`tab ${activeTab === 'mex' ? 'active' : ''}`}
             onClick={() => setActiveTab('mex')}
           >
-            MEX Manager
+            Install
           </button>
           <button
             className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
