@@ -2,6 +2,274 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const API_URL = '/api'
 
+// Animation name mappings - internal name -> friendly name
+const ANIM_NAMES = {
+  // Jabs
+  'Attack11': 'Jab 1',
+  'Attack12': 'Jab 2',
+  'Attack13': 'Jab 3',
+  'Attack100Start': 'Rapid Jab (Start)',
+  'Attack100Loop': 'Rapid Jab (Loop)',
+  'Attack100End': 'Rapid Jab (End)',
+
+  // Tilts
+  'AttackHi3': 'Up Tilt',
+  'AttackLw3': 'Down Tilt',
+  'AttackS3S': 'Forward Tilt',
+  'AttackS3Hi': 'Forward Tilt (Up)',
+  'AttackS3HiS': 'Forward Tilt (Up-Mid)',
+  'AttackS3Lw': 'Forward Tilt (Down)',
+  'AttackS3LwS': 'Forward Tilt (Down-Mid)',
+
+  // Smashes
+  'AttackHi4': 'Up Smash',
+  'AttackLw4': 'Down Smash',
+  'AttackS4S': 'Forward Smash',
+  'AttackS4Hi': 'Forward Smash (Up)',
+  'AttackS4Lw': 'Forward Smash (Down)',
+
+  // Dash Attack
+  'AttackDash': 'Dash Attack',
+
+  // Aerials
+  'AttackAirN': 'Neutral Air',
+  'AttackAirHi': 'Up Air',
+  'AttackAirF': 'Forward Air',
+  'AttackAirLw': 'Down Air',
+  'AttackAirB': 'Back Air',
+  'LandingAirN': 'Nair Landing',
+  'LandingAirHi': 'Uair Landing',
+  'LandingAirF': 'Fair Landing',
+  'LandingAirLw': 'Dair Landing',
+  'LandingAirB': 'Bair Landing',
+
+  // Specials (Grounded)
+  'SpecialN': 'Neutral Special',
+  'SpecialNStart': 'Neutral Special (Start)',
+  'SpecialNLoop': 'Neutral Special (Loop)',
+  'SpecialNEnd': 'Neutral Special (End)',
+  'SpecialHi': 'Up Special',
+  'SpecialLw': 'Down Special',
+  'SpecialS': 'Side Special',
+  'SpecialSStart': 'Side Special (Start)',
+  'SpecialSLoop': 'Side Special (Loop)',
+  'SpecialSEnd': 'Side Special (End)',
+
+  // Specials (Aerial)
+  'SpecialAirN': 'Neutral Special (Air)',
+  'SpecialAirNStart': 'Neutral Special (Air Start)',
+  'SpecialAirNLoop': 'Neutral Special (Air Loop)',
+  'SpecialAirNEnd': 'Neutral Special (Air End)',
+  'SpecialAirHi': 'Up Special (Air)',
+  'SpecialAirLw': 'Down Special (Air)',
+  'SpecialAirS': 'Side Special (Air)',
+  'SpecialAirSStart': 'Side Special (Air Start)',
+  'SpecialAirSLoop': 'Side Special (Air Loop)',
+  'SpecialAirSEnd': 'Side Special (Air End)',
+
+  // Grabs & Throws
+  'Catch': 'Grab',
+  'CatchDash': 'Dash Grab',
+  'CatchCut': 'Grab Release',
+  'CatchAttack': 'Pummel',
+  'ThrowF': 'Forward Throw',
+  'ThrowB': 'Back Throw',
+  'ThrowHi': 'Up Throw',
+  'ThrowLw': 'Down Throw',
+
+  // Misc Attacks
+  'Appeal': 'Taunt',
+  'AppealL': 'Taunt (Left)',
+  'AppealR': 'Taunt (Right)',
+  'CliffAttackQuick': 'Ledge Attack (<100%)',
+  'CliffAttackSlow': 'Ledge Attack (>100%)',
+  'DownAttackD': 'Getup Attack (Face Down)',
+  'DownAttackU': 'Getup Attack (Face Up)',
+  'AirCatch': 'Z-Air',
+  'AirCatchHit': 'Z-Air (Hit Wall)',
+
+  // Movement
+  'Wait1': 'Idle 1',
+  'Wait2': 'Idle 2',
+  'Wait3': 'Idle 3',
+  'Wait4': 'Idle 4',
+  'Walk': 'Walk',
+  'WalkSlow': 'Walk (Slow)',
+  'WalkMiddle': 'Walk (Medium)',
+  'WalkFast': 'Walk (Fast)',
+  'Dash': 'Dash',
+  'Run': 'Run',
+  'RunBrake': 'Run Brake',
+  'Turn': 'Turn',
+  'TurnRun': 'Turn (Running)',
+  'Jump': 'Jump',
+  'JumpF': 'Jump (Forward)',
+  'JumpB': 'Jump (Back)',
+  'JumpAerialF': 'Double Jump (Forward)',
+  'JumpAerialB': 'Double Jump (Back)',
+  'Fall': 'Fall',
+  'FallF': 'Fall (Forward)',
+  'FallB': 'Fall (Back)',
+  'FallAerial': 'Fall (After Double Jump)',
+  'FallAerialF': 'Fall (After DJ Forward)',
+  'FallAerialB': 'Fall (After DJ Back)',
+  'FallSpecial': 'Fall (Helpless)',
+  'FallSpecialF': 'Fall (Helpless Forward)',
+  'FallSpecialB': 'Fall (Helpless Back)',
+  'Landing': 'Landing',
+  'LandingFallSpecial': 'Landing (Helpless)',
+  'Squat': 'Crouch',
+  'SquatWait': 'Crouch (Hold)',
+  'SquatRv': 'Crouch (Stand Up)',
+  'Pass': 'Platform Drop',
+
+  // Shield & Dodge
+  'Guard': 'Shield',
+  'GuardOn': 'Shield (Start)',
+  'GuardOff': 'Shield (Release)',
+  'GuardDamage': 'Shield (Hit)',
+  'GuardReflect': 'Powershield',
+  'EscapeF': 'Roll Forward',
+  'EscapeB': 'Roll Back',
+  'Escape': 'Spot Dodge',
+  'EscapeAir': 'Air Dodge',
+
+  // Ledge
+  'CliffWait': 'Ledge Hang',
+  'CliffClimbQuick': 'Ledge Getup (<100%)',
+  'CliffClimbSlow': 'Ledge Getup (>100%)',
+  'CliffJumpQuick1': 'Ledge Jump (<100%)',
+  'CliffJumpQuick2': 'Ledge Jump 2 (<100%)',
+  'CliffJumpSlow1': 'Ledge Jump (>100%)',
+  'CliffJumpSlow2': 'Ledge Jump 2 (>100%)',
+  'CliffEscapeQuick': 'Ledge Roll (<100%)',
+  'CliffEscapeSlow': 'Ledge Roll (>100%)',
+
+  // Damage
+  'DamageN1': 'Damage (Light)',
+  'DamageN2': 'Damage (Medium)',
+  'DamageN3': 'Damage (Heavy)',
+  'DamageHi1': 'Damage High (Light)',
+  'DamageHi2': 'Damage High (Medium)',
+  'DamageHi3': 'Damage High (Heavy)',
+  'DamageLw1': 'Damage Low (Light)',
+  'DamageLw2': 'Damage Low (Medium)',
+  'DamageLw3': 'Damage Low (Heavy)',
+  'DamageAir1': 'Damage Air (Light)',
+  'DamageAir2': 'Damage Air (Medium)',
+  'DamageAir3': 'Damage Air (Heavy)',
+  'DamageFlyHi': 'Knockback (Up)',
+  'DamageFlyN': 'Knockback (Normal)',
+  'DamageFlyLw': 'Knockback (Down)',
+  'DamageFlyTop': 'Knockback (Straight Up)',
+  'DamageFlyRoll': 'Tumble',
+  'DamageFall': 'Tumble Fall',
+
+  // Down States
+  'DownBoundU': 'Bounce (Face Up)',
+  'DownBoundD': 'Bounce (Face Down)',
+  'DownWaitU': 'Lying Down (Face Up)',
+  'DownWaitD': 'Lying Down (Face Down)',
+  'DownDamageU': 'Hit While Down (Face Up)',
+  'DownDamageD': 'Hit While Down (Face Down)',
+  'DownStandU': 'Getup (Face Up)',
+  'DownStandD': 'Getup (Face Down)',
+  'DownFowardU': 'Getup Roll Forward (Face Up)',
+  'DownFowardD': 'Getup Roll Forward (Face Down)',
+  'DownBackU': 'Getup Roll Back (Face Up)',
+  'DownBackD': 'Getup Roll Back (Face Down)',
+
+  // Tech
+  'Passive': 'Tech',
+  'PassiveStandF': 'Tech Roll Forward',
+  'PassiveStandB': 'Tech Roll Back',
+  'PassiveWall': 'Wall Tech',
+  'PassiveWallJump': 'Wall Tech Jump',
+  'PassiveCeil': 'Ceiling Tech',
+
+  // KO
+  'DeadUp': 'Star KO',
+  'DeadLeft': 'Screen KO (Left)',
+  'DeadRight': 'Screen KO (Right)',
+  'DeadUpStar': 'Star KO (Alt)',
+  'DeadUpFall': 'Star KO Fall',
+
+  // Entry
+  'Entry': 'Entry',
+  'EntryStart': 'Entry (Start)',
+  'EntryEnd': 'Entry (End)',
+
+  // Win/Loss
+  'Win1': 'Victory Pose 1',
+  'Win2': 'Victory Pose 2',
+  'Win3': 'Victory Pose 3',
+  'Lose': 'Clapping',
+}
+
+// Animation categories for organization
+const ANIM_CATEGORIES = {
+  'Grounded Attacks': ['Attack11', 'Attack12', 'Attack13', 'Attack100', 'AttackDash', 'AttackHi3', 'AttackLw3', 'AttackS3', 'AttackHi4', 'AttackLw4', 'AttackS4'],
+  'Aerials': ['AttackAirN', 'AttackAirHi', 'AttackAirF', 'AttackAirLw', 'AttackAirB', 'LandingAir'],
+  'Specials': ['SpecialN', 'SpecialHi', 'SpecialLw', 'SpecialS', 'SpecialAirN', 'SpecialAirHi', 'SpecialAirLw', 'SpecialAirS'],
+  'Grabs & Throws': ['Catch', 'Throw'],
+  'Movement': ['Wait', 'Walk', 'Dash', 'Run', 'Turn', 'Jump', 'Fall', 'Landing', 'Squat', 'Pass'],
+  'Defense': ['Guard', 'Escape', 'Cliff', 'Passive'],
+  'Damage': ['Damage', 'Down'],
+  'Misc': ['Appeal', 'Entry', 'Dead', 'Win', 'Lose'],
+}
+
+// Extract the core animation name from full symbol
+// e.g. "PlyFox5K_Share_ACTION_Wait1_figatree" -> "Wait1"
+const extractAnimName = (symbol) => {
+  // Match pattern: Ply{Char}_Share_ACTION_{AnimName}_figatree
+  const match = symbol.match(/_ACTION_(.+?)_figatree$/)
+  if (match) return match[1]
+
+  // Also try without _figatree suffix
+  const match2 = symbol.match(/_ACTION_(.+)$/)
+  if (match2) return match2[1]
+
+  return symbol
+}
+
+// Get friendly name for animation
+const getAnimDisplayName = (symbol) => {
+  const coreName = extractAnimName(symbol)
+  if (ANIM_NAMES[coreName]) return ANIM_NAMES[coreName]
+  return coreName
+}
+
+// Categorize an animation
+const getAnimCategory = (symbol) => {
+  const coreName = extractAnimName(symbol)
+  for (const [category, prefixes] of Object.entries(ANIM_CATEGORIES)) {
+    if (prefixes.some(prefix => coreName.startsWith(prefix))) {
+      return category
+    }
+  }
+  return 'Other'
+}
+
+// Group animations by category
+const groupAnimations = (animList) => {
+  const grouped = {}
+  for (const symbol of animList) {
+    const category = getAnimCategory(symbol)
+    if (!grouped[category]) grouped[category] = []
+    grouped[category].push(symbol)
+  }
+
+  // Sort categories in preferred order
+  const categoryOrder = Object.keys(ANIM_CATEGORIES).concat(['Other'])
+  const sorted = {}
+  for (const cat of categoryOrder) {
+    if (grouped[cat] && grouped[cat].length > 0) {
+      sorted[cat] = grouped[cat]
+    }
+  }
+  return sorted
+}
+
 // Module-level flag to prevent double-start from React StrictMode
 let viewerStarting = false
 
@@ -330,12 +598,22 @@ const ModelViewer = ({ character, skinId, onClose }) => {
               className="anim-select"
             >
               <option value="">Select animation...</option>
-              {animList
-                .filter(sym => !animFilter || sym.toLowerCase().includes(animFilter.toLowerCase()))
-                .map(sym => (
-                  <option key={sym} value={sym}>{sym}</option>
-                ))
-              }
+              {Object.entries(groupAnimations(
+                animList.filter(sym => {
+                  if (!animFilter) return true
+                  const filter = animFilter.toLowerCase()
+                  const displayName = getAnimDisplayName(sym).toLowerCase()
+                  return sym.toLowerCase().includes(filter) || displayName.includes(filter)
+                })
+              )).map(([category, symbols]) => (
+                <optgroup key={category} label={category}>
+                  {symbols.map(sym => (
+                    <option key={sym} value={sym}>
+                      {getAnimDisplayName(sym)}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </div>
         )}
