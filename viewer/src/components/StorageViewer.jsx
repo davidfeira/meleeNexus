@@ -97,6 +97,17 @@ export default function StorageViewer({ metadata, onRefresh }) {
   const [lastImageUpdate, setLastImageUpdate] = useState(Date.now()) // For cache-busting images
   const [show3DViewer, setShow3DViewer] = useState(false) // 3D model viewer
   const [slippiAdvancedOpen, setSlippiAdvancedOpen] = useState(false) // Collapsible Slippi controls
+  const [showSkinCreator, setShowSkinCreator] = useState(false) // Skin creator modal
+  const [skinCreatorStep, setSkinCreatorStep] = useState('select') // 'select' or 'edit'
+  const [vanillaCostumes, setVanillaCostumes] = useState([])
+  const [selectedVanillaCostume, setSelectedVanillaCostume] = useState(null)
+  const [skinCreatorLoading, setSkinCreatorLoading] = useState(false)
+  const [skinCreatorError, setSkinCreatorError] = useState(null)
+  const [viewerWs, setViewerWs] = useState(null)
+  const skinCreatorCanvasRef = useRef(null)
+  const [viewerDragging, setViewerDragging] = useState(false)
+  const [viewerDragButton, setViewerDragButton] = useState(null)
+  const viewerLastMousePos = useRef({ x: 0, y: 0 })
 
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState(null) // { index, id }
@@ -1580,6 +1591,293 @@ export default function StorageViewer({ metadata, onRefresh }) {
 
   const characters = Object.keys(allCharacters).sort()
 
+  // Skin Creator - Load vanilla costumes
+  const loadVanillaCostumes = async (character) => {
+    try {
+      setSkinCreatorLoading(true)
+      setSkinCreatorError(null)
+      const response = await fetch(`${API_URL}/vanilla/costumes/${character}`)
+      const data = await response.json()
+      if (data.success) {
+        setVanillaCostumes(data.costumes)
+      } else {
+        setSkinCreatorError(data.error)
+      }
+    } catch (err) {
+      setSkinCreatorError(err.message)
+    } finally {
+      setSkinCreatorLoading(false)
+    }
+  }
+
+  // Skin Creator - Start viewer with selected costume
+  const startSkinCreatorViewer = async (costume) => {
+    try {
+      setSkinCreatorLoading(true)
+      setSkinCreatorError(null)
+      setSelectedVanillaCostume(costume)
+
+      const response = await fetch(`${API_URL}/viewer/start-vanilla`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          character: selectedCharacter,
+          costumeCode: costume.code
+        })
+      })
+
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error)
+      }
+
+      // Connect WebSocket
+      const ws = new WebSocket(data.wsUrl)
+      ws.binaryType = 'blob'
+
+      ws.onopen = () => {
+        setSkinCreatorLoading(false)
+        setSkinCreatorStep('edit')
+      }
+
+      ws.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+          const bitmap = await createImageBitmap(event.data)
+          const canvas = skinCreatorCanvasRef.current
+          if (canvas) {
+            const ctx = canvas.getContext('2d')
+            canvas.width = bitmap.width
+            canvas.height = bitmap.height
+            ctx.drawImage(bitmap, 0, 0)
+          }
+        }
+      }
+
+      ws.onerror = () => {
+        setSkinCreatorError('WebSocket connection failed')
+        setSkinCreatorLoading(false)
+      }
+
+      ws.onclose = () => {
+        setViewerWs(null)
+      }
+
+      setViewerWs(ws)
+
+    } catch (err) {
+      setSkinCreatorError(err.message)
+      setSkinCreatorLoading(false)
+    }
+  }
+
+  // Skin Creator - Close and cleanup
+  const closeSkinCreator = async () => {
+    if (viewerWs) {
+      viewerWs.close()
+      setViewerWs(null)
+    }
+    // Stop the viewer backend
+    try {
+      await fetch(`${API_URL}/viewer/stop`, { method: 'POST' })
+    } catch (e) {
+      // Ignore errors on cleanup
+    }
+    setShowSkinCreator(false)
+    setSkinCreatorStep('select')
+    setVanillaCostumes([])
+    setSelectedVanillaCostume(null)
+    setSkinCreatorError(null)
+  }
+
+  // Skin Creator - Open and load costumes
+  const openSkinCreator = () => {
+    setShowSkinCreator(true)
+    setSkinCreatorStep('select')
+    loadVanillaCostumes(selectedCharacter)
+  }
+
+  // Skin Creator - Camera controls
+  const sendViewerCamera = (deltas) => {
+    if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+      viewerWs.send(JSON.stringify({ type: 'camera', ...deltas }))
+    }
+  }
+
+  const handleViewerMouseDown = (e) => {
+    e.preventDefault()
+    setViewerDragging(true)
+    setViewerDragButton(e.button)
+    viewerLastMousePos.current = { x: e.clientX, y: e.clientY }
+  }
+
+  const handleViewerMouseMove = (e) => {
+    if (!viewerDragging) return
+
+    const deltaX = e.clientX - viewerLastMousePos.current.x
+    const deltaY = e.clientY - viewerLastMousePos.current.y
+    viewerLastMousePos.current = { x: e.clientX, y: e.clientY }
+
+    if (viewerDragButton === 2) {
+      // Right-click: Pan
+      sendViewerCamera({ deltaX: -deltaX * 0.1, deltaY: deltaY * 0.1 })
+    } else {
+      // Left-click: Rotate
+      sendViewerCamera({ deltaRotX: deltaY * 0.5, deltaRotY: deltaX * 0.5 })
+    }
+  }
+
+  const handleViewerMouseUp = () => {
+    setViewerDragging(false)
+    setViewerDragButton(null)
+  }
+
+  const handleViewerWheel = (e) => {
+    e.preventDefault()
+    const zoomFactor = e.deltaY > 0 ? -0.1 : 0.1
+    sendViewerCamera({ deltaZoom: zoomFactor })
+  }
+
+  const handleViewerContextMenu = (e) => {
+    e.preventDefault()
+  }
+
+  // Skin Creator Modal
+  const renderSkinCreator = () => (
+    <>
+      {showSkinCreator && (
+        <div className="skin-creator-overlay">
+          <div className="skin-creator-modal">
+            {/* Header */}
+            <div className="skin-creator-header">
+              <div className="skin-creator-title">
+                <h1>Skin Creator</h1>
+                <span className="skin-creator-character">{selectedCharacter}</span>
+                {selectedVanillaCostume && (
+                  <span className="skin-creator-costume">{selectedVanillaCostume.colorName}</span>
+                )}
+              </div>
+              <button
+                className="skin-creator-close"
+                onClick={closeSkinCreator}
+                title="Close (Esc)"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                <span>Close</span>
+              </button>
+            </div>
+
+            {/* Costume Selection Step */}
+            {skinCreatorStep === 'select' && (
+              <div className="skin-creator-select">
+                <h2>Select a base costume</h2>
+                <p>Choose a vanilla costume to use as your starting point</p>
+
+                {skinCreatorLoading && (
+                  <div className="skin-creator-loading">Loading costumes...</div>
+                )}
+
+                {skinCreatorError && (
+                  <div className="skin-creator-error">{skinCreatorError}</div>
+                )}
+
+                <div className="skin-creator-costume-grid">
+                  {vanillaCostumes.map(costume => (
+                    <div
+                      key={costume.code}
+                      className="skin-creator-costume-card"
+                      onClick={() => startSkinCreatorViewer(costume)}
+                    >
+                      <div className="costume-preview">
+                        {costume.hasCsp ? (
+                          <img
+                            src={`${BACKEND_URL}/vanilla/${selectedCharacter}/${costume.code}/csp.png`}
+                            alt={costume.colorName}
+                          />
+                        ) : (
+                          <div className="costume-placeholder">{costume.colorCode}</div>
+                        )}
+                      </div>
+                      <div className="costume-name">{costume.colorName}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Editor Step */}
+            {skinCreatorStep === 'edit' && (
+              <div className="skin-creator-body">
+                {/* Left Panel - Texture List */}
+                <div className="skin-creator-textures">
+                  <div className="skin-creator-panel-header">Textures</div>
+                  <div className="skin-creator-texture-list">
+                    <div className="skin-creator-texture-item selected">
+                      <div className="texture-thumbnail"></div>
+                      <span>Body</span>
+                    </div>
+                    <div className="skin-creator-texture-item">
+                      <div className="texture-thumbnail"></div>
+                      <span>Face</span>
+                    </div>
+                    <div className="skin-creator-texture-item">
+                      <div className="texture-thumbnail"></div>
+                      <span>Eyes</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Center - Paint Canvas */}
+                <div className="skin-creator-canvas-area">
+                  <div className="skin-creator-toolbar">
+                    <button className="tool-btn active" title="Pencil">✏️</button>
+                    <button className="tool-btn" title="Brush">🖌️</button>
+                    <button className="tool-btn" title="Fill">🪣</button>
+                    <button className="tool-btn" title="Eyedropper">💉</button>
+                    <button className="tool-btn" title="Eraser">🧹</button>
+                    <div className="toolbar-separator"></div>
+                    <input type="color" className="color-picker" defaultValue="#ff0000" title="Color" />
+                    <input type="range" className="brush-size" min="1" max="50" defaultValue="5" title="Brush Size" />
+                  </div>
+                  <div className="skin-creator-canvas">
+                    <div className="canvas-placeholder">
+                      <span>Paint Canvas</span>
+                      <p>Select a texture to start editing</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Panel - 3D Viewer */}
+                <div className="skin-creator-viewer">
+                  <div className="skin-creator-panel-header">3D Preview</div>
+                  <div
+                    className="skin-creator-3d"
+                    onMouseDown={handleViewerMouseDown}
+                    onMouseMove={handleViewerMouseMove}
+                    onMouseUp={handleViewerMouseUp}
+                    onMouseLeave={handleViewerMouseUp}
+                    onWheel={handleViewerWheel}
+                    onContextMenu={handleViewerContextMenu}
+                  >
+                    {skinCreatorLoading ? (
+                      <div className="viewer-placeholder">
+                        <span>Loading...</span>
+                      </div>
+                    ) : (
+                      <canvas ref={skinCreatorCanvasRef} className="viewer-canvas" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   // Edit Modal Component (reusable)
   const renderEditModal = () => (
     <>
@@ -2479,12 +2777,26 @@ export default function StorageViewer({ metadata, onRefresh }) {
                   return renderSkinCard(item.skin, item.folderId, idx, item.arrayIndex)
                 }
               })}
+              <div
+                className="skin-card create-mod-card"
+                onClick={openSkinCreator}
+              >
+                <div className="skin-image-container">
+                  <div className="create-mod-placeholder">
+                    <span className="create-mod-icon">+</span>
+                  </div>
+                </div>
+                <div className="skin-info">
+                  <div className="skin-color">Create New Mod</div>
+                </div>
+              </div>
             </div>
           )}
         </div>
         {renderEditModal()}
         {renderSlippiDialog()}
         {renderContextMenu()}
+        {renderSkinCreator()}
       </div>
     )
   }

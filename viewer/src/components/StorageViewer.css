@@ -1596,3 +1596,424 @@
   color: var(--color-cyan);
   background: var(--color-bg-surface);
 }
+
+/* Create New Mod Card */
+.create-mod-card {
+  cursor: pointer;
+  border: 2px dashed var(--color-border);
+  background: transparent;
+  transition: all var(--transition-fast);
+}
+
+.create-mod-card:hover {
+  border-color: var(--color-cyan);
+  background: var(--color-bg-surface);
+}
+
+.create-mod-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-deep);
+  border-radius: var(--radius-sm);
+}
+
+.create-mod-icon {
+  font-size: 3rem;
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.create-mod-card:hover .create-mod-icon {
+  color: var(--color-cyan);
+}
+
+/* Skin Creator Modal */
+.skin-creator-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-base);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+}
+
+.skin-creator-modal {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.skin-creator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-deep);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.skin-creator-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.skin-creator-title h1 {
+  font-size: 1.25rem;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.skin-creator-character {
+  color: var(--color-cyan);
+  font-size: 0.875rem;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-sm);
+}
+
+.skin-creator-close {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.skin-creator-close:hover {
+  border-color: var(--color-red);
+  color: var(--color-red);
+  background: rgba(255, 100, 100, 0.1);
+}
+
+.skin-creator-close span {
+  font-size: 0.875rem;
+}
+
+/* Body - 3 panel layout */
+.skin-creator-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.skin-creator-panel-header {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-deep);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+}
+
+/* Left Panel - Textures */
+.skin-creator-textures {
+  width: 200px;
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.skin-creator-texture-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skin-creator-texture-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.skin-creator-texture-item:hover {
+  border-color: var(--color-text-tertiary);
+}
+
+.skin-creator-texture-item.selected {
+  border-color: var(--color-cyan);
+  background: rgba(0, 255, 255, 0.05);
+}
+
+.texture-thumbnail {
+  width: 48px;
+  height: 48px;
+  background: var(--color-bg-base);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.skin-creator-texture-item span {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* Center - Canvas Area */
+.skin-creator-canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.skin-creator-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-deep);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.tool-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all var(--transition-fast);
+}
+
+.tool-btn:hover {
+  border-color: var(--color-text-tertiary);
+}
+
+.tool-btn.active {
+  border-color: var(--color-cyan);
+  background: rgba(0, 255, 255, 0.1);
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 var(--space-2);
+}
+
+.color-picker {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-picker::-webkit-color-swatch {
+  border-radius: var(--radius-xs);
+  border: none;
+}
+
+.brush-size {
+  width: 100px;
+  accent-color: var(--color-cyan);
+}
+
+.skin-creator-canvas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-base);
+  overflow: hidden;
+}
+
+.canvas-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  gap: var(--space-2);
+}
+
+.canvas-placeholder span {
+  font-size: 1.5rem;
+}
+
+.canvas-placeholder p {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Right Panel - 3D Viewer */
+.skin-creator-viewer {
+  width: 350px;
+  background: var(--color-bg-surface);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.skin-creator-3d {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-base);
+  cursor: grab;
+  user-select: none;
+}
+
+.skin-creator-3d:active {
+  cursor: grabbing;
+}
+
+.viewer-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  gap: var(--space-2);
+}
+
+.viewer-placeholder span {
+  font-size: 1.25rem;
+}
+
+.viewer-placeholder p {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Skin Creator - Costume Selection */
+.skin-creator-select {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-6);
+  overflow-y: auto;
+}
+
+.skin-creator-select h2 {
+  font-size: 1.5rem;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.skin-creator-select p {
+  color: var(--color-text-tertiary);
+  margin: 0 0 var(--space-6) 0;
+}
+
+.skin-creator-loading {
+  color: var(--color-text-secondary);
+  padding: var(--space-4);
+}
+
+.skin-creator-error {
+  color: var(--color-red);
+  padding: var(--space-4);
+  background: rgba(255, 100, 100, 0.1);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+}
+
+.skin-creator-costume-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 800px;
+}
+
+.skin-creator-costume-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.skin-creator-costume-card:hover {
+  border-color: var(--color-cyan);
+  background: var(--color-bg-deep);
+  transform: translateY(-2px);
+}
+
+.costume-preview {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-base);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.costume-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.costume-placeholder {
+  font-size: 1.5rem;
+  color: var(--color-text-tertiary);
+  font-weight: bold;
+}
+
+.costume-name {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.skin-creator-costume {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-deep);
+  border-radius: var(--radius-sm);
+}
+
+/* 3D Viewer Canvas */
+.viewer-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
