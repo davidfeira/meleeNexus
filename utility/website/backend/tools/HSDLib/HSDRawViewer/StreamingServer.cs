@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -52,6 +53,9 @@ namespace HSDRawViewer
 
         // Animation archive manager (for loading real Melee animations)
         private FighterAJManager _ajManager;
+
+        // Cached texture list (populated after first render to avoid Invoke deadlocks)
+        private List<TextureInfo> _cachedTextureList = null;
 
         public StreamingServer(int port, string logPath = null)
         {
@@ -314,6 +318,10 @@ namespace HSDRawViewer
                     _viewport.Render();
                     Application.DoEvents();
                 }
+
+                // Cache texture list after initial render
+                _cachedTextureList = _renderJObj.GetTextureList();
+                Log($"Cached {_cachedTextureList.Count} textures");
             }
 
             // Log viewport/control sizes for debugging
@@ -421,7 +429,7 @@ namespace HSDRawViewer
         private async Task HandleClientAsync(WebSocket webSocket)
         {
             _currentClient = webSocket;
-            var receiveBuffer = new byte[4096];
+            var receiveBuffer = new byte[65536]; // 64KB for texture data
             var frameInterval = TimeSpan.FromMilliseconds(1000.0 / _targetFps);
             var lastFrameTime = DateTime.UtcNow;
             int frameCount = 0;
@@ -681,6 +689,106 @@ namespace HSDRawViewer
                         {
                             LogError("Error in getAnimList", ex);
                             await SendJsonAsync(webSocket, new { type = "animList", symbols = Array.Empty<string>() });
+                        }
+                        break;
+
+                    case "getTextures":
+                        // Return cached texture list (thumbnails for sidebar)
+                        try
+                        {
+                            if (_cachedTextureList != null)
+                            {
+                                var textureList = _cachedTextureList.Select(t => new
+                                {
+                                    index = t.Index,
+                                    width = t.Width,
+                                    height = t.Height,
+                                    name = t.Name,
+                                    thumbnail = t.ThumbnailBase64
+                                }).ToList();
+                                await SendJsonAsync(webSocket, new { type = "textureList", textures = textureList });
+                            }
+                            else
+                            {
+                                await SendJsonAsync(webSocket, new { type = "textureList", textures = Array.Empty<object>() });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogError("Error in getTextures", ex);
+                            await SendJsonAsync(webSocket, new { type = "textureList", textures = Array.Empty<object>() });
+                        }
+                        break;
+
+                    case "getFullTexture":
+                        // Return full resolution texture for editor
+                        try
+                        {
+                            if (root.TryGetProperty("index", out var texIdxProp) && _cachedTextureList != null)
+                            {
+                                int texIndex = texIdxProp.GetInt32();
+                                if (texIndex >= 0 && texIndex < _cachedTextureList.Count)
+                                {
+                                    var tex = _cachedTextureList[texIndex];
+                                    // Convert BGRA to RGBA and encode as PNG
+                                    byte[] rgbaData = new byte[tex.RgbaData.Length];
+                                    for (int i = 0; i < tex.RgbaData.Length; i += 4)
+                                    {
+                                        rgbaData[i + 0] = tex.RgbaData[i + 2]; // R
+                                        rgbaData[i + 1] = tex.RgbaData[i + 1]; // G
+                                        rgbaData[i + 2] = tex.RgbaData[i + 0]; // B
+                                        rgbaData[i + 3] = tex.RgbaData[i + 3]; // A
+                                    }
+                                    using var image = SixLabors.ImageSharp.Image.LoadPixelData<Rgba32>(rgbaData, tex.Width, tex.Height);
+                                    using var ms = new MemoryStream();
+                                    image.Save(ms, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
+                                    string base64Data = Convert.ToBase64String(ms.ToArray());
+                                    await SendJsonAsync(webSocket, new { type = "fullTexture", index = texIndex, width = tex.Width, height = tex.Height, data = base64Data });
+                                }
+                                else
+                                {
+                                    await SendJsonAsync(webSocket, new { type = "fullTexture", error = "Invalid texture index" });
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogError("Error in getFullTexture", ex);
+                            await SendJsonAsync(webSocket, new { type = "fullTexture", error = ex.Message });
+                        }
+                        break;
+
+                    case "updateTexture":
+                        // Update a texture with new image data
+                        try
+                        {
+                            if (root.TryGetProperty("index", out var indexProp) &&
+                                root.TryGetProperty("data", out var dataProp))
+                            {
+                                int texIndex = indexProp.GetInt32();
+                                string base64Data = dataProp.GetString();
+                                byte[] pngData = Convert.FromBase64String(base64Data);
+
+                                // Use BeginInvoke to avoid deadlock
+                                _hostForm.BeginInvoke((Action)(() =>
+                                {
+                                    try
+                                    {
+                                        _renderJObj.UpdateTexture(texIndex, pngData);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        LogError($"Error updating texture {texIndex}", ex);
+                                    }
+                                }));
+
+                                await SendJsonAsync(webSocket, new { type = "textureUpdated", index = texIndex, success = true });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogError("Error in updateTexture", ex);
+                            await SendJsonAsync(webSocket, new { type = "textureUpdated", success = false, error = ex.Message });
                         }
                         break;
 

@@ -1765,11 +1765,44 @@
   background: var(--color-bg-base);
   border-radius: var(--radius-xs);
   flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.skin-creator-texture-item span {
-  font-size: 0.875rem;
+.texture-thumbnail img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.texture-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.texture-name {
+  font-size: 0.8rem;
   color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.texture-size {
+  font-size: 0.7rem;
+  color: var(--color-text-tertiary);
+}
+
+.texture-loading {
+  padding: var(--space-4);
+  color: var(--color-text-tertiary);
+  font-size: 0.875rem;
+  text-align: center;
 }
 
 /* Center - Canvas Area */
@@ -1869,6 +1902,14 @@
 .canvas-placeholder p {
   font-size: 0.875rem;
   margin: 0;
+}
+
+.paint-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+  cursor: crosshair;
+  background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 50% / 16px 16px;
 }
 
 /* Right Panel - 3D Viewer */

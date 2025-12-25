@@ -104,7 +104,12 @@ export default function StorageViewer({ metadata, onRefresh }) {
   const [skinCreatorLoading, setSkinCreatorLoading] = useState(false)
   const [skinCreatorError, setSkinCreatorError] = useState(null)
   const [viewerWs, setViewerWs] = useState(null)
+  const [modelTextures, setModelTextures] = useState([])
+  const [selectedTextureIndex, setSelectedTextureIndex] = useState(null)
   const skinCreatorCanvasRef = useRef(null)
+  const paintCanvasRef = useRef(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const lastDrawPos = useRef(null)
   const [viewerDragging, setViewerDragging] = useState(false)
   const [viewerDragButton, setViewerDragButton] = useState(null)
   const viewerLastMousePos = useRef({ x: 0, y: 0 })
@@ -1638,6 +1643,8 @@ export default function StorageViewer({ metadata, onRefresh }) {
       ws.onopen = () => {
         setSkinCreatorLoading(false)
         setSkinCreatorStep('edit')
+        // Request texture list
+        ws.send(JSON.stringify({ type: 'getTextures' }))
       }
 
       ws.onmessage = async (event) => {
@@ -1649,6 +1656,52 @@ export default function StorageViewer({ metadata, onRefresh }) {
             canvas.width = bitmap.width
             canvas.height = bitmap.height
             ctx.drawImage(bitmap, 0, 0)
+          }
+        } else {
+          // JSON message
+          try {
+            const msg = JSON.parse(event.data)
+            if (msg.type === 'textureList') {
+              setModelTextures(msg.textures || [])
+              if (msg.textures?.length > 0) {
+                setSelectedTextureIndex(0)
+              }
+            } else if (msg.type === 'fullTexture') {
+              // Load full texture onto paint canvas
+              console.log('Received fullTexture', { index: msg.index, width: msg.width, height: msg.height, dataLength: msg.data?.length, error: msg.error })
+              if (msg.error) {
+                console.error('fullTexture error:', msg.error)
+                return
+              }
+              if (!msg.data) {
+                console.error('fullTexture: no data received')
+                return
+              }
+              const canvas = paintCanvasRef.current
+              console.log('Paint canvas ref:', canvas)
+              if (canvas) {
+                const img = new Image()
+                img.onload = () => {
+                  console.log('Image loaded', { imgWidth: img.width, imgHeight: img.height })
+                  canvas.width = msg.width
+                  canvas.height = msg.height
+                  const ctx = canvas.getContext('2d')
+                  ctx.imageSmoothingEnabled = false
+                  ctx.drawImage(img, 0, 0)
+                  console.log('Full texture loaded onto canvas', { canvasWidth: canvas.width, canvasHeight: canvas.height })
+                }
+                img.onerror = (err) => {
+                  console.error('Failed to load texture image:', err)
+                }
+                img.src = `data:image/png;base64,${msg.data}`
+              } else {
+                console.error('Paint canvas not available')
+              }
+            } else if (msg.type === 'textureUpdated') {
+              console.log('Received textureUpdated response:', msg)
+            }
+          } catch (e) {
+            console.error('Error parsing WebSocket message:', e, event.data?.substring?.(0, 100))
           }
         }
       }
@@ -1687,6 +1740,8 @@ export default function StorageViewer({ metadata, onRefresh }) {
     setVanillaCostumes([])
     setSelectedVanillaCostume(null)
     setSkinCreatorError(null)
+    setModelTextures([])
+    setSelectedTextureIndex(null)
   }
 
   // Skin Creator - Open and load costumes
@@ -1739,6 +1794,143 @@ export default function StorageViewer({ metadata, onRefresh }) {
 
   const handleViewerContextMenu = (e) => {
     e.preventDefault()
+  }
+
+  // Skin Creator - Load texture onto paint canvas when selected
+  // For now, use thumbnail as source (will upgrade to full res later)
+  useEffect(() => {
+    if (selectedTextureIndex === null || !modelTextures[selectedTextureIndex]) return
+
+    const tex = modelTextures[selectedTextureIndex]
+    const canvas = paintCanvasRef.current
+    if (!canvas || !tex.thumbnail) {
+      console.log('Cannot load texture - canvas or thumbnail missing', { canvas: !!canvas, thumbnail: !!tex.thumbnail })
+      return
+    }
+
+    console.log('Loading texture onto canvas:', { index: selectedTextureIndex, width: tex.width, height: tex.height })
+
+    const img = new Image()
+    img.onload = () => {
+      // Set canvas to actual texture size
+      canvas.width = tex.width
+      canvas.height = tex.height
+      const ctx = canvas.getContext('2d')
+      ctx.imageSmoothingEnabled = false
+      // Draw thumbnail scaled up to full size (for testing)
+      ctx.drawImage(img, 0, 0, tex.width, tex.height)
+      console.log('Texture loaded onto canvas')
+    }
+    img.onerror = (err) => {
+      console.error('Failed to load thumbnail image:', err)
+    }
+    img.src = `data:image/png;base64,${tex.thumbnail}`
+  }, [selectedTextureIndex, modelTextures])
+
+  // Skin Creator - Paint canvas mouse handlers
+  const getCanvasCoords = (e) => {
+    const canvas = paintCanvasRef.current
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    return {
+      x: Math.floor((e.clientX - rect.left) * scaleX),
+      y: Math.floor((e.clientY - rect.top) * scaleY)
+    }
+  }
+
+  const drawPixel = (x, y) => {
+    const canvas = paintCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#ff0000' // Red for now
+    ctx.fillRect(x, y, 1, 1)
+  }
+
+  // Bresenham's line algorithm to draw continuous lines
+  const drawLine = (x0, y0, x1, y1) => {
+    const dx = Math.abs(x1 - x0)
+    const dy = Math.abs(y1 - y0)
+    const sx = x0 < x1 ? 1 : -1
+    const sy = y0 < y1 ? 1 : -1
+    let err = dx - dy
+
+    while (true) {
+      drawPixel(x0, y0)
+      if (x0 === x1 && y0 === y1) break
+      const e2 = 2 * err
+      if (e2 > -dy) { err -= dy; x0 += sx }
+      if (e2 < dx) { err += dx; y0 += sy }
+    }
+  }
+
+  const handlePaintMouseDown = (e) => {
+    if (e.button !== 0) return // Left click only
+    setIsDrawing(true)
+    const coords = getCanvasCoords(e)
+    if (coords) {
+      drawPixel(coords.x, coords.y)
+      lastDrawPos.current = coords
+    }
+  }
+
+  const handlePaintMouseMove = (e) => {
+    if (!isDrawing) return
+    const coords = getCanvasCoords(e)
+    if (coords) {
+      if (lastDrawPos.current) {
+        drawLine(lastDrawPos.current.x, lastDrawPos.current.y, coords.x, coords.y)
+      } else {
+        drawPixel(coords.x, coords.y)
+      }
+      lastDrawPos.current = coords
+    }
+  }
+
+  const handlePaintMouseUp = () => {
+    if (isDrawing) {
+      setIsDrawing(false)
+      lastDrawPos.current = null
+      // Send updated texture to backend
+      sendTextureUpdate()
+    }
+  }
+
+  const sendTextureUpdate = () => {
+    const canvas = paintCanvasRef.current
+    console.log('sendTextureUpdate called', { canvas: !!canvas, ws: !!viewerWs, wsState: viewerWs?.readyState, selectedTextureIndex })
+    if (!canvas || !viewerWs || viewerWs.readyState !== WebSocket.OPEN) {
+      console.log('sendTextureUpdate: early return - missing canvas/ws or ws not open')
+      return
+    }
+    if (selectedTextureIndex === null) return
+
+    const ctx = canvas.getContext('2d')
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+    // Convert to base64
+    const tempCanvas = document.createElement('canvas')
+    tempCanvas.width = canvas.width
+    tempCanvas.height = canvas.height
+    const tempCtx = tempCanvas.getContext('2d')
+    tempCtx.putImageData(imageData, 0, 0)
+
+    const dataUrl = tempCanvas.toDataURL('image/png')
+    const base64 = dataUrl.replace('data:image/png;base64,', '')
+
+    console.log('Sending updateTexture', { index: selectedTextureIndex, dataLength: base64.length, canvasSize: `${canvas.width}x${canvas.height}` })
+
+    try {
+      viewerWs.send(JSON.stringify({
+        type: 'updateTexture',
+        index: selectedTextureIndex,
+        data: base64
+      }))
+      console.log('updateTexture sent successfully')
+    } catch (err) {
+      console.error('Error sending updateTexture:', err)
+    }
   }
 
   // Skin Creator Modal
@@ -1812,20 +2004,29 @@ export default function StorageViewer({ metadata, onRefresh }) {
               <div className="skin-creator-body">
                 {/* Left Panel - Texture List */}
                 <div className="skin-creator-textures">
-                  <div className="skin-creator-panel-header">Textures</div>
+                  <div className="skin-creator-panel-header">Textures ({modelTextures.length})</div>
                   <div className="skin-creator-texture-list">
-                    <div className="skin-creator-texture-item selected">
-                      <div className="texture-thumbnail"></div>
-                      <span>Body</span>
-                    </div>
-                    <div className="skin-creator-texture-item">
-                      <div className="texture-thumbnail"></div>
-                      <span>Face</span>
-                    </div>
-                    <div className="skin-creator-texture-item">
-                      <div className="texture-thumbnail"></div>
-                      <span>Eyes</span>
-                    </div>
+                    {modelTextures.length === 0 ? (
+                      <div className="texture-loading">Loading textures...</div>
+                    ) : (
+                      modelTextures.map((tex, idx) => (
+                        <div
+                          key={idx}
+                          className={`skin-creator-texture-item ${selectedTextureIndex === idx ? 'selected' : ''}`}
+                          onClick={() => setSelectedTextureIndex(idx)}
+                        >
+                          <div className="texture-thumbnail">
+                            {tex.thumbnail && (
+                              <img src={`data:image/png;base64,${tex.thumbnail}`} alt={tex.name} />
+                            )}
+                          </div>
+                          <div className="texture-info">
+                            <span className="texture-name">{tex.name}</span>
+                            <span className="texture-size">{tex.width}x{tex.height}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -1841,11 +2042,21 @@ export default function StorageViewer({ metadata, onRefresh }) {
                     <input type="color" className="color-picker" defaultValue="#ff0000" title="Color" />
                     <input type="range" className="brush-size" min="1" max="50" defaultValue="5" title="Brush Size" />
                   </div>
-                  <div className="skin-creator-canvas">
-                    <div className="canvas-placeholder">
-                      <span>Paint Canvas</span>
-                      <p>Select a texture to start editing</p>
-                    </div>
+                  <div
+                    className="skin-creator-canvas"
+                    onMouseDown={handlePaintMouseDown}
+                    onMouseMove={handlePaintMouseMove}
+                    onMouseUp={handlePaintMouseUp}
+                    onMouseLeave={handlePaintMouseUp}
+                  >
+                    {selectedTextureIndex === null ? (
+                      <div className="canvas-placeholder">
+                        <span>Paint Canvas</span>
+                        <p>Select a texture to start editing</p>
+                      </div>
+                    ) : (
+                      <canvas ref={paintCanvasRef} className="paint-canvas" />
+                    )}
                   </div>
                 </div>
 

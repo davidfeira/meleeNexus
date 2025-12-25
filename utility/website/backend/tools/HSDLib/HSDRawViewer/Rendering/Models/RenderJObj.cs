@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using SixLabors.ImageSharp.Processing;
 
 namespace HSDRawViewer.Rendering.Models
 {
@@ -21,6 +22,18 @@ namespace HSDRawViewer.Rendering.Models
         Shape = 4,
         All = Joint | Material | Shape,
     }
+
+    public class TextureInfo
+    {
+        public int Index { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public string Name { get; set; }
+        public byte[] RgbaData { get; set; }
+        public string ThumbnailBase64 { get; set; }
+        public int GlTextureId { get; set; }
+    }
+
     public class RenderJObj
     {
         private static int MAX_TEX { get; } = 4;
@@ -1070,6 +1083,96 @@ namespace HSDRawViewer.Rendering.Models
             }
 
             Console.WriteLine($"Successfully hid {hiddenCount} DOBJs out of {RenderDobjs.Count} total");
+        }
+
+        /// <summary>
+        /// Gets a list of all textures used by this model
+        /// </summary>
+        public List<TextureInfo> GetTextureList()
+        {
+            var textures = new List<TextureInfo>();
+            var seenTextures = new HashSet<byte[]>();
+            int textureIndex = 0;
+
+            foreach (var dobj in RenderDobjs)
+            {
+                if (dobj._dobj?.Mobj?.Textures == null)
+                    continue;
+
+                foreach (var tobj in dobj._dobj.Mobj.Textures.List)
+                {
+                    if (tobj?.ImageData?.ImageData == null)
+                        continue;
+
+                    // Skip if we've already seen this texture data
+                    if (seenTextures.Contains(tobj.ImageData.ImageData))
+                        continue;
+
+                    seenTextures.Add(tobj.ImageData.ImageData);
+
+                    int width = tobj.ImageData.Width;
+                    int height = tobj.ImageData.Height;
+                    byte[] rgbaData = tobj.GetDecodedImageData();
+
+                    // Get OpenGL texture ID
+                    int glTextureId = -1;
+                    if (imageBufferTextureIndex.TryGetValue(tobj.ImageData.ImageData, out int texIndex))
+                    {
+                        glTextureId = TextureManager.GetGLID(texIndex);
+                    }
+
+                    // Generate thumbnail (64x64)
+                    string thumbnailBase64 = "";
+                    try
+                    {
+                        using var image = SixLabors.ImageSharp.Image.LoadPixelData<SixLabors.ImageSharp.PixelFormats.Bgra32>(rgbaData, width, height);
+                        image.Mutate(x => x.Resize(64, 64));
+                        using var ms = new System.IO.MemoryStream();
+                        image.Save(ms, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
+                        thumbnailBase64 = Convert.ToBase64String(ms.ToArray());
+                    }
+                    catch { }
+
+                    textures.Add(new TextureInfo
+                    {
+                        Index = textureIndex,
+                        Width = width,
+                        Height = height,
+                        Name = $"Texture_{textureIndex}",
+                        RgbaData = rgbaData,
+                        ThumbnailBase64 = thumbnailBase64,
+                        GlTextureId = glTextureId
+                    });
+
+                    textureIndex++;
+                }
+            }
+
+            return textures;
+        }
+
+        /// <summary>
+        /// Updates a texture with new image data
+        /// </summary>
+        public void UpdateTexture(int textureIndex, byte[] pngData)
+        {
+            var textures = GetTextureList();
+            if (textureIndex < 0 || textureIndex >= textures.Count)
+                return;
+
+            var texInfo = textures[textureIndex];
+            if (texInfo.GlTextureId < 0)
+                return;
+
+            // Decode PNG to RGBA
+            using var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(pngData);
+            byte[] rgbaData = new byte[image.Width * image.Height * 4];
+            image.CopyPixelDataTo(rgbaData);
+
+            // Update OpenGL texture
+            GL.BindTexture(TextureTarget.Texture2D, texInfo.GlTextureId);
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, image.Width, image.Height,
+                PixelFormat.Rgba, PixelType.UnsignedByte, rgbaData);
         }
     }
 }
