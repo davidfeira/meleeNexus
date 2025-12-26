@@ -569,6 +569,9 @@ namespace HSDRawViewer
             var dbg = @"C:\Users\david\projects\new aka\logs\RECEIVE_DEBUG.txt";
             try
             {
+                // Use a MemoryStream to accumulate fragmented messages
+                using var messageBuffer = new MemoryStream();
+
                 while (webSocket.State == WebSocketState.Open && !_cts.Token.IsCancellationRequested)
                 {
                     var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
@@ -582,18 +585,27 @@ namespace HSDRawViewer
 
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
-                        var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        // Log message type (not full message to avoid spam)
-                        string msgType = "unknown";
-                        try {
-                            using var doc = JsonDocument.Parse(message);
-                            msgType = doc.RootElement.GetProperty("type").GetString();
-                            File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} MSG: {msgType}\n");
-                        } catch { }
-                        await ProcessCommandAsync(webSocket, message);
-                        // Log after processing to see if we're stuck
-                        if (msgType == "exportDat")
-                            File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} exportDat PROCESSED, wsState={webSocket.State}\n");
+                        // Accumulate message fragments
+                        messageBuffer.Write(buffer, 0, result.Count);
+
+                        // Only process when we have the complete message
+                        if (result.EndOfMessage)
+                        {
+                            var message = Encoding.UTF8.GetString(messageBuffer.ToArray());
+                            messageBuffer.SetLength(0); // Clear for next message
+
+                            // Log message type (not full message to avoid spam)
+                            string msgType = "unknown";
+                            try {
+                                using var doc = JsonDocument.Parse(message);
+                                msgType = doc.RootElement.GetProperty("type").GetString();
+                                File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} MSG: {msgType}\n");
+                            } catch { }
+                            await ProcessCommandAsync(webSocket, message);
+                            // Log after processing to see if we're stuck
+                            if (msgType == "exportDat")
+                                File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} exportDat PROCESSED, wsState={webSocket.State}\n");
+                        }
                     }
                 }
                 File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} LOOP EXIT: wsState={webSocket.State}\n");
