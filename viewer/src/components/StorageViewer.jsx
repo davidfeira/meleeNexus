@@ -2466,10 +2466,6 @@ export default function StorageViewer({ metadata, onRefresh, onSkinCreatorChange
                           <div className="tool-palette-section-title">Drawing</div>
                           <div className="tool-palette-tools">
                             <button className="tool-btn active" title="Pencil">✏️</button>
-                            <button className="tool-btn" title="Brush">🖌️</button>
-                            <button className="tool-btn" title="Fill">🪣</button>
-                            <button className="tool-btn" title="Eyedropper">💉</button>
-                            <button className="tool-btn" title="Eraser">🧹</button>
                           </div>
                         </div>
                       </div>
