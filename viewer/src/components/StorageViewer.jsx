@@ -1728,21 +1728,11 @@ export default function StorageViewer({ metadata, onRefresh }) {
 
       ws.onclose = () => {
         setViewerWs(null)
-
-        // Attempt reconnection if not intentionally closed
-        if (skinCreatorReconnectAttempts < skinCreatorMaxReconnectAttempts && !skinCreatorError) {
-          const delay = Math.pow(2, skinCreatorReconnectAttempts) * 1000
-          console.log(`Skin creator reconnecting in ${delay}ms (attempt ${skinCreatorReconnectAttempts + 1}/${skinCreatorMaxReconnectAttempts})`)
-          setSkinCreatorReconnecting(true)
-
-          skinCreatorReconnectTimeoutRef.current = setTimeout(() => {
-            setSkinCreatorReconnectAttempts(prev => prev + 1)
-            startSkinCreatorViewer(costume)
-          }, delay)
-        } else if (skinCreatorReconnectAttempts >= skinCreatorMaxReconnectAttempts) {
+        // Don't auto-reconnect - just show error and let user retry manually
+        if (!skinCreatorError) {
           setSkinCreatorError('Connection lost. Click Retry to reconnect.')
-          setSkinCreatorReconnecting(false)
         }
+        setSkinCreatorReconnecting(false)
       }
 
       setViewerWs(ws)
@@ -1886,21 +1876,11 @@ export default function StorageViewer({ metadata, onRefresh }) {
 
       ws.onclose = () => {
         setViewerWs(null)
-
-        // Attempt reconnection if not intentionally closed
-        if (skinCreatorReconnectAttempts < skinCreatorMaxReconnectAttempts && !skinCreatorError) {
-          const delay = Math.pow(2, skinCreatorReconnectAttempts) * 1000
-          console.log(`Skin creator (vault) reconnecting in ${delay}ms (attempt ${skinCreatorReconnectAttempts + 1}/${skinCreatorMaxReconnectAttempts})`)
-          setSkinCreatorReconnecting(true)
-
-          skinCreatorReconnectTimeoutRef.current = setTimeout(() => {
-            setSkinCreatorReconnectAttempts(prev => prev + 1)
-            startSkinCreatorFromVault(costume)
-          }, delay)
-        } else if (skinCreatorReconnectAttempts >= skinCreatorMaxReconnectAttempts) {
+        // Don't auto-reconnect - just show error and let user retry manually
+        if (!skinCreatorError) {
           setSkinCreatorError('Connection lost. Click Retry to reconnect.')
-          setSkinCreatorReconnecting(false)
         }
+        setSkinCreatorReconnecting(false)
       }
 
       setViewerWs(ws)

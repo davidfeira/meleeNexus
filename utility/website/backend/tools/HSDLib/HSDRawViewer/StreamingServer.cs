@@ -57,6 +57,9 @@ namespace HSDRawViewer
         // Cached texture list (populated after first render to avoid Invoke deadlocks)
         private List<TextureInfo> _cachedTextureList = null;
 
+        // Lock to serialize WebSocket sends (prevent concurrent sends from corrupting connection)
+        private SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
+
         // Store the raw file and path for exporting modified DAT
         private HSDRaw.HSDRawFile _rawFile = null;
         private string _datFilePath = null;
@@ -99,7 +102,7 @@ namespace HSDRawViewer
         {
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             var logLine = $"[{timestamp}] {message}";
-            Console.WriteLine(logLine);
+            // Don't use Console.WriteLine - blocks when stdout buffer fills (backend doesn't read it)
             try
             {
                 _logWriter?.WriteLine(logLine);
@@ -115,7 +118,7 @@ namespace HSDRawViewer
             {
                 logLine += $"\n  Exception: {ex.GetType().Name}: {ex.Message}\n  Stack: {ex.StackTrace}";
             }
-            Console.WriteLine(logLine);
+            // Don't use Console.WriteLine - blocks when stdout buffer fills
             try
             {
                 _logWriter?.WriteLine(logLine);
@@ -521,24 +524,22 @@ namespace HSDRawViewer
                                 frameData = ms.ToArray();
                             }
 
-                            await webSocket.SendAsync(
-                                new ArraySegment<byte>(frameData),
-                                WebSocketMessageType.Binary,
-                                true,
-                                _cts.Token
-                            );
+                            await SendBinaryAsync(webSocket, frameData);
 
                             frameCount++;
 
+                            // Log every 100 frames to debug file
                             if (frameCount % 100 == 0)
                             {
                                 var totalElapsed = (DateTime.UtcNow - startTime).TotalSeconds;
-                                Console.Error.WriteLine($"[STREAM] {frameCount} frames, {frameCount / totalElapsed:F1} fps");
+                                File.AppendAllText(@"C:\Users\david\projects\new aka\logs\FRAME_DEBUG.txt",
+                                    $"{DateTime.Now:HH:mm:ss.fff} Frame {frameCount}, {frameCount / totalElapsed:F1} fps\n");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.Error.WriteLine($"[FRAME ERR] {ex.Message}");
+                            File.AppendAllText(@"C:\Users\david\projects\new aka\logs\FRAME_DEBUG.txt",
+                                $"{DateTime.Now:HH:mm:ss.fff} FRAME ERROR: {ex.Message}\n");
                         }
                     }
 
@@ -565,6 +566,7 @@ namespace HSDRawViewer
 
         private async Task ReceiveMessagesAsync(WebSocket webSocket, byte[] buffer)
         {
+            var dbg = @"C:\Users\david\projects\new aka\logs\RECEIVE_DEBUG.txt";
             try
             {
                 while (webSocket.State == WebSocketState.Open && !_cts.Token.IsCancellationRequested)
@@ -573,6 +575,7 @@ namespace HSDRawViewer
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
+                        File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} CLOSE message received\n");
                         Log("Received close message from client");
                         break;
                     }
@@ -580,12 +583,24 @@ namespace HSDRawViewer
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
                         var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        // Log message type (not full message to avoid spam)
+                        string msgType = "unknown";
+                        try {
+                            using var doc = JsonDocument.Parse(message);
+                            msgType = doc.RootElement.GetProperty("type").GetString();
+                            File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} MSG: {msgType}\n");
+                        } catch { }
                         await ProcessCommandAsync(webSocket, message);
+                        // Log after processing to see if we're stuck
+                        if (msgType == "exportDat")
+                            File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} exportDat PROCESSED, wsState={webSocket.State}\n");
                     }
                 }
+                File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} LOOP EXIT: wsState={webSocket.State}\n");
             }
             catch (Exception ex)
             {
+                File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} EXCEPTION: {ex.Message}\n");
                 LogError("Receive error", ex);
             }
         }
@@ -838,7 +853,9 @@ namespace HSDRawViewer
                             File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} STEP11 - sending response ({datBytes.Length} bytes)\n");
                             await SendJsonAsync(webSocket, new { type = "exportDat", success = true, data = base64Data });
                             File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} STEP12 - DONE!\n");
+                            File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} STEP13 - before Log\n");
                             Log($"DAT exported successfully, size: {datBytes.Length} bytes");
+                            File.AppendAllText(dbg, $"{DateTime.Now:HH:mm:ss.fff} STEP14 - after Log, about to break\n");
                         }
                         catch (Exception ex)
                         {
@@ -907,18 +924,54 @@ namespace HSDRawViewer
             {
                 LogError("Command parse error", ex);
             }
+
+            // Debug: log when ProcessCommandAsync completes
+            File.AppendAllText(@"C:\Users\david\projects\new aka\logs\RECEIVE_DEBUG.txt",
+                $"{DateTime.Now:HH:mm:ss.fff} ProcessCommand DONE\n");
         }
 
         private async Task SendJsonAsync(WebSocket webSocket, object data)
         {
-            var json = JsonSerializer.Serialize(data);
-            var bytes = Encoding.UTF8.GetBytes(json);
-            await webSocket.SendAsync(
-                new ArraySegment<byte>(bytes),
-                WebSocketMessageType.Text,
-                true,
-                _cts.Token
-            );
+            await _sendLock.WaitAsync();
+            try
+            {
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    var json = JsonSerializer.Serialize(data);
+                    var bytes = Encoding.UTF8.GetBytes(json);
+                    await webSocket.SendAsync(
+                        new ArraySegment<byte>(bytes),
+                        WebSocketMessageType.Text,
+                        true,
+                        _cts.Token
+                    );
+                }
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
+
+        private async Task SendBinaryAsync(WebSocket webSocket, byte[] data)
+        {
+            await _sendLock.WaitAsync();
+            try
+            {
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    await webSocket.SendAsync(
+                        new ArraySegment<byte>(data),
+                        WebSocketMessageType.Binary,
+                        true,
+                        _cts.Token
+                    );
+                }
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
         }
 
         public void Stop()
