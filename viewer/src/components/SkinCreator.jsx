@@ -24,8 +24,10 @@ export default function SkinCreator({
   const skinCreatorCanvasRef = useRef(null)
   const paintCanvasRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
+  const isDrawingRef = useRef(false) // Ref for interval callback access
   const lastDrawPos = useRef(null)
   const [editedTextures, setEditedTextures] = useState({}) // { [index]: dataUrl }
+  const editedTexturesRef = useRef({}) // Ref for interval callback access
   const [isDirty, setIsDirty] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [skinName, setSkinName] = useState('')
@@ -39,6 +41,12 @@ export default function SkinCreator({
   const skinCreatorReconnectTimeoutRef = useRef(null)
   const skinCreatorMaxReconnectAttempts = 3
 
+  // Connection health and auto-refresh
+  const autoRefreshIntervalRef = useRef(null)
+  const pingIntervalRef = useRef(null)
+  const lastMessageTimeRef = useRef(Date.now()) // Track last message received (any type)
+  const [connectionFailed, setConnectionFailed] = useState(false)
+
   // Color Palette state
   const [colorPaletteEnabled, setColorPaletteEnabled] = useState(false)
   const [colorGroups, setColorGroups] = useState([])
@@ -47,6 +55,11 @@ export default function SkinCreator({
   const [originalTextureData, setOriginalTextureData] = useState({}) // { [index]: ImageData }
   const pixelGroupMapRef = useRef({}) // Maps pixels to their color group index
   const colorDebounceRef = useRef(null)
+
+  // Keep editedTexturesRef in sync with state for interval callback access
+  useEffect(() => {
+    editedTexturesRef.current = editedTextures
+  }, [editedTextures])
 
   // Notify parent when skin creator opens/closes
   useEffect(() => {
@@ -116,10 +129,42 @@ export default function SkinCreator({
         setSkinCreatorStep('edit')
         setSkinCreatorReconnecting(false)
         setSkinCreatorReconnectAttempts(0)
+        setConnectionFailed(false)
         ws.send(JSON.stringify({ type: 'getTextures' }))
+
+        // Start auto-refresh interval (every 5 seconds, pauses while drawing)
+        lastMessageTimeRef.current = Date.now()
+        autoRefreshIntervalRef.current = setInterval(() => {
+          if (isDrawingRef.current) return // Skip if user is actively drawing
+          if (ws.readyState === WebSocket.OPEN) {
+            // Resend any edited textures to ensure 3D viewer stays in sync
+            Object.entries(editedTexturesRef.current).forEach(([idx, dataUrl]) => {
+              const base64 = dataUrl.replace('data:image/png;base64,', '')
+              ws.send(JSON.stringify({
+                type: 'updateTexture',
+                index: parseInt(idx),
+                data: base64
+              }))
+            })
+          }
+        }, 5000)
+
+        // Start health check interval (every 3 seconds)
+        // Check if we've received any message recently (frames, pings, etc.)
+        pingIntervalRef.current = setInterval(() => {
+          if (Date.now() - lastMessageTimeRef.current > 6000) {
+            setConnectionFailed(true)
+            clearAllIntervals()
+            ws.close()
+            return
+          }
+        }, 3000)
       }
 
       ws.onmessage = async (event) => {
+        // Update last message time for health check
+        lastMessageTimeRef.current = Date.now()
+
         if (event.data instanceof Blob) {
           const bitmap = await createImageBitmap(event.data)
           const canvas = skinCreatorCanvasRef.current
@@ -133,10 +178,11 @@ export default function SkinCreator({
           try {
             const msg = JSON.parse(event.data)
             if (msg.type === 'textureList') {
-              setModelTextures(msg.textures || [])
-              if (msg.textures?.length > 0) {
+              // Only set selected index on first load, not on refresh
+              if (modelTextures.length === 0 && msg.textures?.length > 0) {
                 setSelectedTextureIndex(0)
               }
+              setModelTextures(msg.textures || [])
             } else if (msg.type === 'fullTexture') {
               console.log('Received fullTexture', { index: msg.index, width: msg.width, height: msg.height })
               if (msg.error) return
@@ -171,11 +217,13 @@ export default function SkinCreator({
       ws.onerror = () => {
         setSkinCreatorError('WebSocket connection failed')
         setSkinCreatorLoading(false)
+        clearAllIntervals()
       }
 
       ws.onclose = () => {
         setViewerWs(null)
-        if (!skinCreatorError) {
+        clearAllIntervals()
+        if (!skinCreatorError && !connectionFailed) {
           setSkinCreatorError('Connection lost. Click Retry to reconnect.')
         }
         setSkinCreatorReconnecting(false)
@@ -223,10 +271,42 @@ export default function SkinCreator({
         setSkinCreatorStep('edit')
         setSkinCreatorReconnecting(false)
         setSkinCreatorReconnectAttempts(0)
+        setConnectionFailed(false)
         ws.send(JSON.stringify({ type: 'getTextures' }))
+
+        // Start auto-refresh interval (every 5 seconds, pauses while drawing)
+        lastMessageTimeRef.current = Date.now()
+        autoRefreshIntervalRef.current = setInterval(() => {
+          if (isDrawingRef.current) return // Skip if user is actively drawing
+          if (ws.readyState === WebSocket.OPEN) {
+            // Resend any edited textures to ensure 3D viewer stays in sync
+            Object.entries(editedTexturesRef.current).forEach(([idx, dataUrl]) => {
+              const base64 = dataUrl.replace('data:image/png;base64,', '')
+              ws.send(JSON.stringify({
+                type: 'updateTexture',
+                index: parseInt(idx),
+                data: base64
+              }))
+            })
+          }
+        }, 5000)
+
+        // Start health check interval (every 3 seconds)
+        // Check if we've received any message recently (frames, pings, etc.)
+        pingIntervalRef.current = setInterval(() => {
+          if (Date.now() - lastMessageTimeRef.current > 6000) {
+            setConnectionFailed(true)
+            clearAllIntervals()
+            ws.close()
+            return
+          }
+        }, 3000)
       }
 
       ws.onmessage = async (event) => {
+        // Update last message time for health check
+        lastMessageTimeRef.current = Date.now()
+
         if (event.data instanceof Blob) {
           const bitmap = await createImageBitmap(event.data)
           const canvas = skinCreatorCanvasRef.current
@@ -240,10 +320,11 @@ export default function SkinCreator({
           try {
             const msg = JSON.parse(event.data)
             if (msg.type === 'textureList') {
-              setModelTextures(msg.textures || [])
-              if (msg.textures?.length > 0) {
+              // Only set selected index on first load, not on refresh
+              if (modelTextures.length === 0 && msg.textures?.length > 0) {
                 setSelectedTextureIndex(0)
               }
+              setModelTextures(msg.textures || [])
             } else if (msg.type === 'fullTexture') {
               if (msg.error) return
               if (!msg.data) return
@@ -277,11 +358,13 @@ export default function SkinCreator({
       ws.onerror = () => {
         setSkinCreatorError('WebSocket connection failed')
         setSkinCreatorLoading(false)
+        clearAllIntervals()
       }
 
       ws.onclose = () => {
         setViewerWs(null)
-        if (!skinCreatorError) {
+        clearAllIntervals()
+        if (!skinCreatorError && !connectionFailed) {
           setSkinCreatorError('Connection lost. Click Retry to reconnect.')
         }
         setSkinCreatorReconnecting(false)
@@ -307,6 +390,9 @@ export default function SkinCreator({
       skinCreatorReconnectTimeoutRef.current = null
     }
 
+    // Clear ping and auto-refresh intervals
+    clearAllIntervals()
+
     setSkinCreatorError('closing')
 
     if (viewerWs) {
@@ -331,6 +417,7 @@ export default function SkinCreator({
     setIsDirty(false)
     setSkinCreatorReconnecting(false)
     setSkinCreatorReconnectAttempts(0)
+    setConnectionFailed(false)
 
     // Reset color palette
     setColorPaletteEnabled(false)
@@ -382,6 +469,44 @@ export default function SkinCreator({
 
   const handleViewerContextMenu = (e) => {
     e.preventDefault()
+  }
+
+  // Refresh textures - resend all edited textures to viewer
+  const refreshTextures = () => {
+    if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+      // Resend any edited textures to ensure 3D viewer is in sync
+      Object.entries(editedTextures).forEach(([idx, dataUrl]) => {
+        const base64 = dataUrl.replace('data:image/png;base64,', '')
+        viewerWs.send(JSON.stringify({
+          type: 'updateTexture',
+          index: parseInt(idx),
+          data: base64
+        }))
+      })
+    }
+  }
+
+  // Handle reconnect after connection failure
+  const handleReconnect = () => {
+    setConnectionFailed(false)
+    setSkinCreatorError(null)
+    if (initialCostume) {
+      startSkinCreatorFromVault(initialCostume)
+    } else if (selectedVanillaCostume) {
+      startSkinCreatorViewer(selectedVanillaCostume)
+    }
+  }
+
+  // Clear all intervals helper
+  const clearAllIntervals = () => {
+    if (autoRefreshIntervalRef.current) {
+      clearInterval(autoRefreshIntervalRef.current)
+      autoRefreshIntervalRef.current = null
+    }
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current)
+      pingIntervalRef.current = null
+    }
   }
 
   // Load texture onto paint canvas when selected
@@ -466,6 +591,7 @@ export default function SkinCreator({
   const handlePaintMouseDown = (e) => {
     if (e.button !== 0) return
     setIsDrawing(true)
+    isDrawingRef.current = true
     const coords = getCanvasCoords(e)
     if (coords) {
       drawPixel(coords.x, coords.y)
@@ -489,6 +615,7 @@ export default function SkinCreator({
   const handlePaintMouseUp = () => {
     if (isDrawing) {
       setIsDrawing(false)
+      isDrawingRef.current = false
       lastDrawPos.current = null
       sendTextureUpdate()
     }
@@ -869,9 +996,13 @@ export default function SkinCreator({
 
   // Handle color group adjustment
   const handleColorAdjust = (groupId, field, value) => {
-    setColorGroups(prev => prev.map(g =>
-      g.id === groupId ? { ...g, [field]: value } : g
-    ))
+    setColorGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g
+      if (field === 'reset') {
+        return { ...g, hueShift: 0, saturationShift: 0 }
+      }
+      return { ...g, [field]: value }
+    }))
   }
 
   // Apply color adjustments when groups change (debounced via effect)
@@ -1181,7 +1312,17 @@ export default function SkinCreator({
                 <div className="skin-creator-right-panel">
                   {/* 3D Preview (square) */}
                   <div className="skin-creator-3d-container">
-                    <div className="skin-creator-panel-header">3D Preview</div>
+                    <div className="skin-creator-panel-header">
+                      <span>3D Preview</span>
+                      <button
+                        className="refresh-btn"
+                        onClick={refreshTextures}
+                        title="Refresh textures"
+                        disabled={!viewerWs || connectionFailed}
+                      >
+                        ↻
+                      </button>
+                    </div>
                     <div
                       className="skin-creator-3d"
                       onMouseDown={handleViewerMouseDown}
@@ -1191,7 +1332,14 @@ export default function SkinCreator({
                       onWheel={handleViewerWheel}
                       onContextMenu={handleViewerContextMenu}
                     >
-                      {skinCreatorLoading ? (
+                      {connectionFailed ? (
+                        <div className="viewer-placeholder connection-failed">
+                          <span>Connection Lost</span>
+                          <button className="reconnect-btn" onClick={handleReconnect}>
+                            Reconnect
+                          </button>
+                        </div>
+                      ) : skinCreatorLoading ? (
                         <div className="viewer-placeholder">
                           <span>Loading...</span>
                         </div>
@@ -1264,6 +1412,13 @@ export default function SkinCreator({
                             {colorGroups.map(group => (
                               <div key={group.id} className="color-group-item">
                                 <div className="color-group-header">
+                                  <div
+                                    className="color-swatch-original"
+                                    style={{ background: group.displayColor }}
+                                    onClick={() => handleColorAdjust(group.id, 'reset', 0)}
+                                    title="Click to reset to original"
+                                  />
+                                  <span className="color-arrow">→</span>
                                   <div
                                     className="color-swatch"
                                     style={{

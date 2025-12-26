@@ -93,6 +93,53 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-text-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Refresh button in panel header */
+.refresh-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background 0.15s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Connection failed state */
+.viewer-placeholder.connection-failed {
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reconnect-btn {
+  padding: 8px 16px;
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s, filter 0.15s;
+}
+
+.reconnect-btn:hover {
+  filter: brightness(1.1);
 }
 
 /* Bottom Panel - Texture Strip (horizontal, 2 rows) */
@@ -563,7 +610,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1001;
+  z-index: 10001;
 }
 
 .skin-creator-save-modal {
@@ -741,6 +788,27 @@
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+.color-swatch-original {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.color-swatch-original:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.color-arrow {
+  font-size: 0.7rem;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
 }
 
 .color-swatch {
